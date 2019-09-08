@@ -20,7 +20,7 @@ BME280I2C::Settings settings(
    BME280::Filter_Off,
    BME280::SpiEnable_False
    //BME280I2C::I2CAddr_0x76 // I2C address. I2C specific.
-);
+   );
 BME280I2C bme(settings);
 
 //Wyświetlacz OLED
@@ -63,9 +63,9 @@ float		SetTempSchedule[7][24]	= {
 
 int		OLED_ON			= 1;		//Przyjmuje wartość '1' dla OLED włączony i '0' dla OLED wyłączony
 boolean		Podlane			= true;		//Przyjmuje wartość true gdy podlane czyli wilgotność >80% i false gdy sucho wilgotność <60%
+boolean		SoilNotification70	= false;	//Przyjmuje wartość true gdy wysłano notyfikacje o wilgotności 70%, true po podlaniu
 boolean		SoilNotification60	= false;	//Przyjmuje wartość true gdy wysłano notyfikacje o wilgotności 60%, true po podlaniu
 boolean		SoilNotification50	= false;	//Przyjmuje wartość true gdy wysłano notyfikacje o wilgotności 50%, true po podlaniu
-boolean		SoilNotification40	= false;	//Przyjmuje wartość true gdy wysłano notyfikacje o wilgotności 40%, true po podlaniu
 float		RH 			= 0;		//Soil Relative Humidity in % 
 long		CZAS_START_MANUAL	= 0;		//Ustawienie czasu przejścia sterowania w trym MANUAL (wartość w sekundach)
 long		CZAS_START_AUTO		= 0;		//Ustawienie czasu przejścia sterowania w trym AUTO (wartość w sekundach)
@@ -77,12 +77,13 @@ float		temp(NAN), hum(NAN), pres(NAN), dewPoint(NAN), absHum(NAN), heatIndex(NAN
 const char	ssid[]			= "XXXX";
 const char	pass[]			= "XXXX";
 const char	auth[]			= "XXXX";	//Token Pokój Rymanowska
-//const int	checkInterval		= 30000;	//Co 30s zostanie sprawdzony czy jest sieć Wi-Fi i czy połączono z serwerem Blynk
 const int	HeatCO			= D6;		//Pin do włączania CO w sterowniku w łazience
 const int	MinTemp			= 14;		//Najniższa możliwa temperatura do ustawienia
 const int	MaxTemp			= 26;		//Najwyższa możliwa temperatura do ustawienia
 const float	TemtHist		= 0.2;		//histereza dla temperatury
 const float	HumidHist		= 5;		//histereza dla wilgotności
+
+//---------------------------------------------------------------------------------------------------------------------------------------------
 
 BLYNK_CONNECTED()			//Informacja że połączono z serwerem Blynk, synchronizacja danych
 {
@@ -147,13 +148,13 @@ void OTA_Handle()			//Deklaracja OTA_Handle:
 		if (WiFi.waitForConnectResult() == WL_CONNECTED)
 		{
 			// Port defaults to 8266
-			// ArduinoOTA.setPort(8266);
+			ArduinoOTA.setPort(8266);
 
 			// Hostname defaults to esp8266-[ChipID]
 			ArduinoOTA.setHostname("Pokoj_Rymanowska");
 
 			// No authentication by default
-			// ArduinoOTA.setPassword("admin");
+			//ArduinoOTA.setPassword("admin");
 
 			// Password can be set with it's md5 value as well
 			// MD5(admin) = 21232f297a57a5a743894a0e4a801fc3
@@ -268,8 +269,8 @@ void Read_BME280_Values()		//Odczyt wskazań z czujnika BME280
 
 	bme.read(pres, temp, hum, tempUnit, presUnit);
 	temp = temp -3;							//Korekta dla temperatury. BME280 się trochę grzeje 
-	pres = pres + 24.634;					//Korekta dostosowująca do ciśnienia na poziomie morza
-	hum = hum + 9.06;						//Korekta poziomu wilgotności odczytanegoe prze BME280.
+	pres = pres + 24.634;						//Korekta dostosowująca do ciśnienia na poziomie morza
+	hum  = hum + 9.06;						//Korekta poziomu wilgotności odczytanegoe prze BME280.
 
 	EnvironmentCalculations::TempUnit     envTempUnit =  EnvironmentCalculations::TempUnit_Celsius;
 	//Dane obliczane na podstawie danych z czujnika
@@ -294,30 +295,30 @@ float ReadSoilMoisture()		//Odczyt z czujnika wilgotności gleby i konwersja do 
 	if (sval > 80 && Podlane == false)
 	{
 		Podlane = true;			//Ustawia wartość na true czyli podlano kwiatka
-		SoilNotification40 = false;	//Ustawia wartość na true czyli zeruje ilość powiadomień po podlaniu kwiatka
 		SoilNotification50 = false;	//Ustawia wartość na true czyli zeruje ilość powiadomień po podlaniu kwiatka
 		SoilNotification60 = false;	//Ustawia wartość na true czyli zeruje ilość powiadomień po podlaniu kwiatka
+		SoilNotification70 = false;	//Ustawia wartość na true czyli zeruje ilość powiadomień po podlaniu kwiatka
 		Blynk.notify("Kwiatek został podlany :)");
 	}
-	else if (sval < 60 && Podlane == true)
+	else if (sval < 70 && Podlane == true)
 	{
 		Podlane = false;		//Ustawia wartość na false czyli kwiatek ma sucho
 	}
 	//Powiadomienia na smartfona
-	if (sval < 40 && Podlane == false && SoilNotification40 == false)
+	if (sval < 50 && Podlane == false && SoilNotification50 == false)
 	{
-		Blynk.notify("Podlej tego kwiatka bo uschnie! Wilgotność spadła już do 40%.");
-		SoilNotification40 = true;	//Ustawia wartość na true czyli powiadomienie przy wilgotności 40% poszło
+		Blynk.notify("Podlej tego kwiatka bo uschnie! Wilgotność spadła już do 50%.");
+		SoilNotification50 = true;	//Ustawia wartość na true czyli powiadomienie przy wilgotności 40% poszło
 	}
-	else if (sval < 50 && Podlane == false  && SoilNotification50 == false)
+	else if (sval < 60 && Podlane == false  && SoilNotification60 == false)
 	{
-		Blynk.notify("Wilgotność w kwiatku spadła poniżej 50%. Teraz już trzeba podlać!");
-		SoilNotification50 = true;	//Ustawia wartość na true czyli powiadomienie przy wilgotności 50% poszło
+		Blynk.notify("Wilgotność w kwiatku spadła poniżej 60%. Teraz już trzeba podlać!");
+		SoilNotification60 = true;	//Ustawia wartość na true czyli powiadomienie przy wilgotności 50% poszło
 	}
-	else if (sval < 60 && Podlane == false && SoilNotification60 == false)
+	else if (sval < 70 && Podlane == false && SoilNotification70 == false)
 	{
-		Blynk.notify("Wilgotność w kwiatku spadła poniżej 60%. Może trzeba podlać?");
-		SoilNotification60 = true;	//Ustawia wartość na true czyli powiadomienie przy wilgotności 60% poszło
+		Blynk.notify("Wilgotność w kwiatku spadła poniżej 70%. Może trzeba podlać?");
+		SoilNotification70 = true;	//Ustawia wartość na true czyli powiadomienie przy wilgotności 60% poszło
 	}
 
 return sval;
@@ -417,7 +418,7 @@ void Wyslij_Dane()			//Wysyłanie danych na serwer Blynka
 	Blynk.virtualWrite(V5, heatIndex);			//Temperatura odczuwalna [°C] 
 	Blynk.virtualWrite(V6, RH);				//Wilgotność gleby [%]  
 	Blynk.virtualWrite(V18, SetTempActual);			//Temperatura zadana [°C]
-	Blynk.virtualWrite(V25, WiFi_Strength(WiFi.RSSI())); //Siła sygnału Wi-Fi [%], constrain() limits range of sensor values to between 0 and 100
+	Blynk.virtualWrite(V25, WiFi_Strength(WiFi.RSSI()));	//Siła sygnału Wi-Fi [%], constrain() limits range of sensor values to between 0 and 100
 	bridge1.virtualWrite(V21, hum);				//Wilgotność w pokoju wysyłana do sterownika w łazience [%]
 }
 
@@ -448,7 +449,7 @@ BLYNK_WRITE(V40)			//Obsługa terminala
 	{
 		terminal.clear();
 		terminal.println("PORT   DATA              VALUE");
-		terminal.print("V0     Temperature   =   ");
+		terminal.print("V0     Temperature    =   ");
 		terminal.print(temp);
 		terminal.println(" °C");
 		terminal.print("V1     Humidity      =   ");
@@ -550,7 +551,7 @@ void setup()
 	Blynk.config(auth);
 
 	//Inicjalizacja Timerów
-	Timer.setInterval(30000, blynkCheck);		//Sprawdza czy BLYNK połączony co 30s
+	Timer.setInterval(30000, blynkCheck);		//Co 30s zostanie sprawdzony czy jest sieć Wi-Fi i czy połączono z serwerem Blynk
 	Timer.setInterval(3000, MainFunction);		//Uruchamia wszystko w pętli co 3s
 
 	Wire.begin();

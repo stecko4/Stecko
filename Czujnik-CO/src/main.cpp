@@ -4,7 +4,18 @@ Sensor              ->  Board
 Vin (Voltage In)    ->  3.3V
 Gnd (Ground)        ->  Gnd
 SDA (Serial Data)   ->  D2 on NodeMCU / Wemos D1 PRO
-SCK (Serial Clock)  ->  D1 on NodeMCU / Wemos D1 PRO */
+SCK (Serial Clock)  ->  D1 on NodeMCU / Wemos D1 PRO
+
+Stężenie tlenku węgla (CO) --> https://kadimex.pl/2017/09/08/tlenek-wegla-czym-jest-jak-powstaje-jak-mozna-sie-przed-nim-uchronic/ 
+Objawy zatrucia
+35 ppm	Maksymalne stężenie CO dopuszczone przez Światową Organizację Zdrowia przy przebywaniu w pomieszczeniu do 8 godzin
+200 ppm	Lekki ból głowy, nudności, ogólne zmęczenie, zawroty głowy po ok. 3 godzinach.
+400 ppm	Zawroty głowy oraz mocny ból po ok. 2 godzinach, zagrożenie życia po 3 godzinach.
+800 ppm	Nasilone nudności, ból i zawroty głowy, wymioty, stan śpiączki po 45 minutach, śmierć po 2-3 godzinach.
+1500 ppm	Bardzo silne nudności, wymioty, ból i zawroty głowy, stan śpiączki po 10-15 minutach, śmierć w ciągu 1 godziny
+12000 ppm	Omdlenie po 2-3 wdechach, śmierć po kilku minutach. */
+
+#include <Arduino.h>
 
 //Mutichannel_Gas_Sensor definition 
 #include "MutichannelGasSensor.h"
@@ -35,7 +46,6 @@ bool OTAConfigured = 0;
 #include <Arduino.h>
 #include <U8g2lib.h>
 U8G2_SH1106_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
-// End of constructor list
 
 int		OLED_ON = 1;		//Deklaracja zmiennej załączenia wyświetlacza OLED gdy sygnał z aplikacji Blynk
 int 		AlarmActive = 0;	//Deklaracja zmiennej odpowiedzialnej za uzbrojenie alarmu
@@ -54,17 +64,10 @@ float		Propane;
 float		IsoButane;
 float		Hydrogen;
 float		Ethanol;
-int		Alarm30 = 0;		//Alarmy dla poszczególnych stężeń CO mierzone w ppm
-int		Alarm50 = 0;
-int		Alarm100 = 0;
-int		Alarm300 = 0;
-
-
-/*Stężenie tlenku węgla (CO)  Minimalny czas aktywacji czujnika tlenku węgla  Maksymalny czas aktywacji czujnika tlenku węgla
-30 ppm  120 minut –
-50 ppm  60 minut  90 minut
-100 ppm 10 minut  40 minut
-300 ppm – 3 minuty  */
+int		Alarm30 = 0;		//Czas w [s] przekroczenia stężenie 30ppm CO (Norma --> 30 ppm  120 minut)
+int		Alarm50 = 0;		//Czas w [s] przekroczenia stężenie 50ppm CO (Norma --> 50 ppm  60 minut  90 minut)
+int		Alarm100 = 0;		//Czas w [s] przekroczenia stężenie 100ppm CO (Norma --> 100 ppm 10 minut  40 minut)
+int		Alarm300 = 0;		//Czas w [s] przekroczenia stężenie 300ppm CO (Norma --> 300 ppm – 3 minuty)
 
 /* http://wiki.seeedstudio.com/Grove-Multichannel_Gas_Sensor/
 c = gas.measure_NH3();		// Ammonia NH3 1 – 500ppm
@@ -230,7 +233,7 @@ void Read_BME280_Values()		//Odczyt z czujnika BME280, temperatura, wilgotność
 void MultiGas_Values()			//Odczyt z czujnika Grove-Multichannel_Gas_Sensor, stężenie CO i CH4
 {
 	//http://wiki.seeedstudio.com/Grove-Multichannel_Gas_Sensor/
-	Metan		= gas.measure_CH4();			// Methane CH4 >1000ppm
+	Metan		= gas.measure_CH4();		// Methane CH4 >1000ppm
 	Tlenek_Wegla	= gas.measure_CO();		// Carbon monoxide CO 1 – 1000ppm
 	/*
 	NH3 = gas.measure_NH3();			// Ammonia NH3 1 – 500ppm
@@ -246,23 +249,14 @@ void MultiGas_Values()			//Odczyt z czujnika Grove-Multichannel_Gas_Sensor, stę
 void MultiGas_ValuesALL()		//Odczyt z czujnika Grove-Multichannel_Gas_Sensor, stężenie CO i CH4
 {
 	//http://wiki.seeedstudio.com/Grove-Multichannel_Gas_Sensor/
-	Metan		= gas.measure_CH4();			// Methane CH4 >1000ppm
+	Metan		= gas.measure_CH4();		// Methane CH4 > 1000ppm
 	Tlenek_Wegla	= gas.measure_CO();		// Carbon monoxide CO 1 – 1000ppm
-	Ammonia		= gas.measure_NH3();
-	Nitrogen_dioxide =gas.measure_NO2();
-	Propane		= gas.measure_C3H8();
-	IsoButane	= gas.measure_C4H10();
-	Hydrogen	= gas.measure_H2();
-	Ethanol		= gas.measure_C2H5OH();
-	/*
-	NH3 = gas.measure_NH3();			// Ammonia NH3 1 – 500ppm
-	CO = gas.measure_CO();				// Carbon monoxide CO 1 – 1000ppm
-	NO2 = gas.measure_NO2();			// Nitrogen dioxide NO2 0.05 – 10ppm
-	C3H8 = gas.measure_C3H8();			// Propane C3H8 >1000ppm
-	C4H10 = gas.measure_C4H10();			// Iso-butane C4H10 >1000ppm
-	CH4 = gas.measure_CH4();			// Methane CH4 >1000ppm
-	H2 = gas.measure_H2();				// Hydrogen H2 1 – 1000ppm
-	C2H5OH = gas.measure_C2H5OH();			// Ethanol C2H5OH 10 – 500ppm */
+	Ammonia		= gas.measure_NH3();		// Ammonia NH3 1 – 500ppm
+	Nitrogen_dioxide =gas.measure_NO2();		// Nitrogen dioxide NO2 0.05 – 10ppm
+	Propane		= gas.measure_C3H8();		// Propane C3H8 > 1000ppm
+	IsoButane	= gas.measure_C4H10();		// Iso-butane C4H10 > 1000ppm
+	Hydrogen	= gas.measure_H2();		// Hydrogen H2 1 – 1000ppm
+	Ethanol		= gas.measure_C2H5OH();		// Ethanol C2H5OH 10 – 500ppm */
 }
 
 void OLED_Display()			//Włącza lub wyłącza wyświetlanie danych na ekranie OLED
@@ -611,7 +605,7 @@ BLYNK_WRITE(V40)			//Obsługa terminala
 		terminal.println(" s");
 	}
 	else if (String("gas") == TerminalCommand)
-	{
+	{	
 		MultiGas_ValuesALL();
 		terminal.clear();
 		terminal.println("GAS                     VALUE");
@@ -638,7 +632,7 @@ BLYNK_WRITE(V40)			//Obsługa terminala
 		terminal.println(" ppm");
 		terminal.print("Ethanol C2H5OH       = ");
 		terminal.print(Ethanol);
-		terminal.println(" ppm");
+		terminal.println(" ppm");		
 	}
 	else if (String("hello") == TerminalCommand)
 	{
@@ -665,11 +659,6 @@ BLYNK_WRITE(V40)			//Obsługa terminala
 
 void Alarm_Check()			//Funkcja sprawdza czy należy uruchomić alarm czyli włączyć ekran z informacją o stężeniu gazów i uruchomić buzer
 {
-	/*Stężenie tlenku węgla (CO) Minimalny czas aktywacji czujnika tlenku węgla  Maksymalny czas aktywacji czujnika tlenku węgla
-	30 ppm  120 minut –
-	50 ppm  60 minut  90 minut
-	100 ppm 10 minut  40 minut
-	300 ppm – 3 minuty  */
 	//Alarm dla przekroczenia stężenia CO
 	if (Alarm30 > 20)		//Stężenie CO utrzymuje się powyżej 30ppm przez ponad 120minut
 	{
@@ -719,12 +708,6 @@ void Alarm_Check()			//Funkcja sprawdza czy należy uruchomić alarm czyli włą
 
 void Gas_Alarms_Count()			//Funkcja uruchamiana co 1s dolicza sekundę do poszczególnych alarmów jeśli stężenie przekroczone określony próg
 {
-	/*Stężenie tlenku węgla (CO) Minimalny czas aktywacji czujnika tlenku węgla  Maksymalny czas aktywacji czujnika tlenku węgla
-	30 ppm  120 minut –
-	50 ppm  60 minut  90 minut
-	100 ppm 10 minut  40 minut
-	300 ppm – 3 minuty  */
-
 	if (Tlenek_Wegla < 30)					//Zeruje czasy wszystkich alarmów
 	{
 		Alarm30 = 0;

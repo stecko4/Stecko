@@ -30,7 +30,7 @@ BME280I2C bme(settings);
 #include <ArduinoOTA.h>
 bool OTAConfigured = 0;
 
-//#define BLYNK_DEBUG			//Optional, this enables lots of prints
+//#define BLYNK_DEBUG					//Optional, this enables lots of prints
 //#define BLYNK_PRINT Serial
 #include <ESP8266WiFi.h>
 #include <BlynkSimpleEsp8266.h>
@@ -45,7 +45,7 @@ float		SetHumidActual		= 50;		//Wilgotności przy której załączy się wentyla
 float		RoomHumid		= 0;		//Wilgotności w pokoju, potrzebna do wyznaczenia wartości wilgotności przy której ma się załączyć wentylator
 int		PhotoResValue		= 0;		//Store value from photoresistor (0-1023)
 int		ProgPhotoresistor	= 300;		//Próg jasności od którego zacznie działać iluminacja sedesu (nie powinno podświetlać jeśli światło w łazience zapalone)
-boolean		isLED_Light		= false;		//TRUE jeśli diody świecą FALSE jeśli nie świecą
+boolean		isLED_Light		= false;	//TRUE jeśli diody świecą FALSE jeśli nie świecą
 float temp(NAN), hum(NAN), pres(NAN), dewPoint(NAN), absHum(NAN), heatIndex(NAN);
 
 //STAŁE
@@ -57,7 +57,9 @@ const int	Piec_CO			= D6;		//Deklaracja pinu na którym będzie włączany piec 
 const int	PIR_Sensor		= D7;		//Deklaracja pinu z sensorem ruchu AM312
 const int	LED_Light		= D8;		//Deklaracja pinu z MOSFETem do iluminacji sedesu
 const int	PhotoResistor		= A0;		//Deklaracja pinu z sensorem światła
-const float	HumidHist		= 4;		//histereza dla wilgotności
+const float	HumidHist		= 4;		//Wartość histerezy dla wilgotności
+
+//---------------------------------------------------------------------------------------------------------------------------------------------
 
 BLYNK_CONNECTED()			//Informacja że połączono z serwerem Blynk, synchronizacja danych
 {
@@ -122,7 +124,7 @@ void OTA_Handle()			//Deklaracja OTA_Handle:
 		if (WiFi.waitForConnectResult() == WL_CONNECTED)
 		{
 			// Port defaults to 8266
-			// ArduinoOTA.setPort(8266);
+			ArduinoOTA.setPort(8266);
 
 			// Hostname defaults to esp8266-[ChipID]
 			ArduinoOTA.setHostname("Lazienka_Rymanowska");
@@ -210,7 +212,7 @@ void Read_BME280_Values()		//Odczyt wskazań z czujnika BME280
 	bme.read(pres, temp, hum, tempUnit, presUnit);
 	temp = temp -0.33;		//Korekta dla temperatury. BME280 się trochę grzeje 
 	pres = pres + 24.634;		//Korekta dostosowująca do ciśnienia na poziomie morza
-	hum = hum;			//Korekta poziomu wilgotności odczytanegoe prze BME280.
+	hum  = hum;			//Korekta poziomu wilgotności odczytanegoe prze BME280.
 
 	EnvironmentCalculations::TempUnit     envTempUnit =  EnvironmentCalculations::TempUnit_Celsius;
 	//Dane obliczane na podstawie danych z czujnika
@@ -235,14 +237,14 @@ void Wyslij_Dane()			//Wysyła dane na serwer Blynk
 	Blynk.virtualWrite(V6, SetHumidActual);			//Wilgotności przy której załączy się wentylator w trybie automatycznym [%] 
 	Blynk.virtualWrite(V25, WiFi_Strength(WiFi.RSSI())); 	//Siła sygnału Wi-Fi [%], constrain() limits range of sensor values to between 0 and 100
 	Blynk.virtualWrite(V55, analogRead(PhotoResistor));	//Czujnik światła
-	Blynk.virtualWrite(V56, digitalRead(PIR_Sensor));	//Czujnik światła
+	Blynk.virtualWrite(V56, digitalRead(PIR_Sensor));	//Czujnik ruchu
 }
 
 void TrybManAuto()			//Ustawienie trybów sterowania wilgotnością
 {
 	switch (Tryb_Sterownika)
 	{
-		case 0:					//Wilgotność w trybie AUTO na podstawie wilgotności w pokoju + histereza
+		case 0:					//Wilgotność w trybie AUTO na podstawie wilgotności w pokoju +- histereza
 			if (RoomHumid + 15 < 50)	//Wilgotność w trybie AUTO
 				{
 					SetHumidActual = 50;
@@ -317,9 +319,9 @@ BLYNK_WRITE(V40)			//Obsługa terminala
 		terminal.print(SetHumidManual);
 		terminal.println(" %");
 		terminal.print("V55    PhotoResistor  =   ");
-		terminal.print(analogRead(PhotoResistor));
-		terminal.print("V56    PIR_Sensor  =   ");
-		terminal.print(digitalRead(PIR_Sensor));
+		terminal.println(analogRead(PhotoResistor));
+		terminal.print("V56    PIR_Sensor     =   ");
+		terminal.println(digitalRead(PIR_Sensor));
 		terminal.print("V25    WiFi Signal    =   ");
 		terminal.print(WiFi_Strength(WiFi.RSSI()));
 		terminal.println(" %");
@@ -372,7 +374,7 @@ BLYNK_WRITE(V11)			//Tryb_Sterownika 0 = AUTO, 1 = ON, 2 = OFF, 3 = MANUAL
 	}
 }
 
-void SedesIlluminationOFF()
+void SedesIlluminationOFF()		//Wyłączenie podświetlania sedesu
 {
 	digitalWrite(LED_Light, LOW);
 	isLED_Light = false;
@@ -384,9 +386,9 @@ void handleInterrupt()			//Obsługa przerwań wywoływanych przez czujnik PIR AM
 	{
 		Timer.restartTimer(timerID);				//Wydłuża iluminacje sedesu o kolejne 30s
 	}
-	else if (analogRead(PhotoResistor) < ProgPhotoresistor )		//Returns true if the specified timer is enabled
+	else if (analogRead(PhotoResistor) < ProgPhotoresistor )	//Returns true if the specified timer is enabled
 	{
-		timerID = Timer.setTimeout(45000, SedesIlluminationOFF);	//Wyłączy iluminacje sedesu za 45s
+		timerID = Timer.setTimeout(45000, SedesIlluminationOFF);//Wyłączy iluminacje sedesu za 45s
 		digitalWrite(LED_Light, HIGH);
 		isLED_Light = true;
 	}
@@ -414,8 +416,8 @@ void setup()
 	Blynk.config(auth);
 
 	//Inicjalizacja Timerów
-	Timer.setInterval(30000, blynkCheck);			//Sprawdza czy BLYNK połączony co 30s
-	Timer.setInterval(3000, MainFunction);			//Uruchamia wszystko w pętli co 3s
+	Timer.setInterval(30000, blynkCheck);		//Sprawdza czy BLYNK połączony co 30s
+	Timer.setInterval(3000, MainFunction);		//Uruchamia wszystko w pętli co 3s
 
 
 	Wire.begin();
@@ -451,6 +453,6 @@ void loop()
 	if ( isLED_Light && analogRead(PhotoResistor) > ProgPhotoresistor )
 	{
 		Timer.deleteTimer(timerID);	//Wyłącza Timer 
-		SedesIlluminationOFF();
+		SedesIlluminationOFF();		//Wyłączenie podświetlania sedesu
 	}
 }
