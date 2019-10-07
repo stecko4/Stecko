@@ -186,7 +186,7 @@ void Bathrum_Humidity_Control()		//Załączanie wentylatora w łazience jeśli w
 	}
 	else if (hum >= SetHumidActual + HumidHist)
 	{
-		if (temp > 24 || analogRead(PhotoResistor) < ProgPhotoresistor)
+		if (temp > 20 || analogRead(PhotoResistor) < ProgPhotoresistor)
 		{
 			digitalWrite(BathFan, LOW);	//turn on relay with voltage HIGH
 			Blynk.virtualWrite(V8, 255);	//Wentylator Włączony
@@ -380,7 +380,7 @@ void SedesIlluminationOFF()		//Wyłączenie podświetlania sedesu
 	isLED_Light = false;
 }
 
-void handleInterrupt()			//Obsługa przerwań wywoływanych przez czujnik PIR AM312
+ICACHE_RAM_ATTR void handleInterrupt()			//Obsługa przerwań wywoływanych przez czujnik PIR AM312
 {
 	if ( isLED_Light && Timer.isEnabled(timerID) && analogRead(PhotoResistor) < ProgPhotoresistor)
 	{

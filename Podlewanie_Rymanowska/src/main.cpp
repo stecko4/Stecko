@@ -28,8 +28,8 @@ const int WaterPumpPower_B = D5;			//Załączenie pompy wody B gdy pin ma warto�
 float Humidity_A =0;					//Zmierzona wartość wilgotności z czujnika A
 float Humidity_B =0;					//Zmierzona wartość wilgotności z czujnika B
 
-int Prog_wilgotnosciA = 80;				//Wilgotność poniżej której będzie podlewał roślinę A (domyślnie 80%)
-int Prog_wilgotnosciB = 80;				//Wilgotność poniżej której będzie podlewał roślinę B (domyślnie 80%)
+int Prog_wilgotnosciA = 85;				//Wilgotność poniżej której będzie podlewał roślinę A (domyślnie 85%)
+int Prog_wilgotnosciB = 85;				//Wilgotność poniżej której będzie podlewał roślinę B (domyślnie 85%)
 int Check = 0 ;
 
 //Definicja stałych
@@ -71,7 +71,7 @@ void Wyslij_Dane()				//Wysyła dane na serwer Blynk
 BLYNK_WRITE(V10)				//Ustawienie progu wilgotności dla rośliny a
 {
 	Prog_wilgotnosciA = param.asInt();
-	Prog_wilgotnosciB = Prog_wilgotnosciA;	//Tymczasowe spięcie, bo nie ma kredytó na konie Blynk, w przyszłości zostanie to rozdzielone
+	//Prog_wilgotnosciB = Prog_wilgotnosciA;	//Tymczasowe spięcie, bo nie ma kredytó na konie Blynk, w przyszłości zostanie to rozdzielone
 }
 
 BLYNK_WRITE(V11)				//Ustawienie progu wilgotności dla rośliny B
@@ -132,8 +132,6 @@ void Watering()					//Załączenie pompy gdy wilgotność poniżej progu
 		Serial.println("Pompa B wyłączona");
 		digitalWrite(WaterPumpPower_B, LOW);  //Wyłączenie pompy
 	}
-
-	MoistureNotification();
 }
 
 void GoToSleep()				//Prześjście w stan DeepSleep po 30s
@@ -146,8 +144,9 @@ void MainAction()
 {
 	CheckSoilMoisture(SoilMoistureSensorPower_A);			//Odczyt wilgotności gleby z czujnika A [%]
 	CheckSoilMoisture(SoilMoistureSensorPower_B);			//Odczyt wilgotności gleby z czujnika B [%]
-	Wyslij_Dane();
-	Watering();
+	Wyslij_Dane();							//Wysyła dane na serwer Blynk
+	MoistureNotification();						//Wysyłanie powiadomień przez Blynk.notify() gdy będzie podlewanie
+	Watering();							//Załączenie pompy gdy wilgotność poniżej progu
 	//Zostanie uruchomione tylko raz za 30s, potrzebne aby dać czas połączyć się z Blynkiem i wymienić informacje
 	Timer.setTimeout(30000L, GoToSleep);
 }
@@ -156,7 +155,7 @@ void setup()
 {
 	Blynk.begin(auth, ssid, pass);
 	//Istawienie zadania które zostanie uruchomione tylko raz po 1s od Timer.run();
-	Timer.setTimeout(1000L, MainAction);
+	Timer.setTimeout(5000L, MainAction);
 
 	//Deklaracja Pinów
 	pinMode(WaterPumpPower_A, OUTPUT);				//Zasilanie pompy A
