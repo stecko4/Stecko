@@ -34,7 +34,7 @@ int Check = 0 ;
 
 //Definicja stałych
 const unsigned long SleepTime = 10000 * 60 * 60;	//Wejście w stan DeepSleep na 1-dną godzinę (3600000000)
-const int PumpTime = 1000 * 30;				//Załączenie pompy na 30s
+const int PumpTime = 1000 * 10;				//Załączenie pompy na 10s
 
 //---------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -130,7 +130,7 @@ void Watering()					//Załączenie pompy gdy wilgotność poniżej progu
 		delay(PumpTime);
 		digitalWrite(2, HIGH);
 		Serial.println("Pompa B wyłączona");
-		digitalWrite(WaterPumpPower_B, LOW);  //Wyłączenie pompy
+		digitalWrite(WaterPumpPower_B, HIGH);  //Wyłączenie pompy
 	}
 }
 
@@ -171,7 +171,6 @@ void setup()
 	{
 		 // wait for serial port to connect. Needed for native USB
   	}
-	
 }
 
 void loop()

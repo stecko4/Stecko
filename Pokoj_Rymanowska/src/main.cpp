@@ -59,7 +59,7 @@ float		SetTempSchedule[7][24]	= {
   {18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.8, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.8, 20.8, 20.8, 20.8, 20.8, 20.8, 20.8, 20.8, 18.5 },  //Czwartek
   {18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.8, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.8, 20.8, 20.8, 20.8, 20.8, 20.8, 20.8, 20.8, 18.5 },  //Piątek
   {18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5 }   //Sobota
-}; //Ustawienia temperatury dla poszczególnych dni/godzin, temperatura musi być pomiędzy 14 a 26 stopni Celsjusza z dokładnością do 2 miejsc po przecinku
+}; //Ustawienia temperatury dla poszczególnych dni/godzin, temperatura musi być pomiędzy 14 a 26 stopni Celsjusza z dokładnością do 1 miejsca po przecinku
 
 int		OLED_ON			= 1;		//Przyjmuje wartość '1' dla OLED włączony i '0' dla OLED wyłączony
 boolean		Podlane			= true;		//Przyjmuje wartość true gdy podlane czyli wilgotność >80% i false gdy sucho wilgotność <60%
@@ -268,7 +268,7 @@ void Read_BME280_Values()		//Odczyt wskazań z czujnika BME280
 	BME280::PresUnit presUnit(BME280::PresUnit_Pa);
 
 	bme.read(pres, temp, hum, tempUnit, presUnit);
-	temp = temp -3;							//Korekta dla temperatury. BME280 się trochę grzeje 
+	temp = temp -4.5;							//Korekta dla temperatury. BME280 się trochę grzeje 
 	pres = pres + 24.634;						//Korekta dostosowująca do ciśnienia na poziomie morza
 	hum  = hum + 9.06;						//Korekta poziomu wilgotności odczytanegoe prze BME280.
 
@@ -448,8 +448,8 @@ BLYNK_WRITE(V40)			//Obsługa terminala
 	else if (String("values") == TerminalCommand)
 	{
 		terminal.clear();
-		terminal.println("PORT   DATA              VALUE");
-		terminal.print("V0     Temperature    =   ");
+		terminal.println("PORT   DATA              VALUE ");
+		terminal.print("V0     Temperature   =   ");
 		terminal.print(temp);
 		terminal.println(" °C");
 		terminal.print("V1     Humidity      =   ");
@@ -483,12 +483,34 @@ BLYNK_WRITE(V40)			//Obsługa terminala
 	{
 		terminal.clear();
 	}
+	else if (String("autotemp") == TerminalCommand)
+	{
+		terminal.clear();
+		terminal.println("H   |Ni  |Pn   |Wt   |Śr   |Czw  |Pi   |So ");
+		int i;
+		int j;
+
+		for (i = 0; i < 24; i++)
+		{		//wyświeltanie zawartości tabeli SetTempSchedule[7][24]
+			if (i<10) terminal.print("0");
+			terminal.print(i);
+			terminal.print("  ");
+			for (j = 0; j < 6; j++)
+			{
+				terminal.print(String(SetTempSchedule[j][i],1));
+				terminal.print(" |");
+			}
+			terminal.print(String(SetTempSchedule[6][i],1));
+			terminal.println("°C");
+		}
+	}
 	else
 	{
 		terminal.clear();
 		terminal.println("Type 'PORTS' to show list");
 		terminal.println("Type 'VALUES' to show sensor data");
 		terminal.println("Type 'CLS' to clear terminal");
+		terminal.println("Type 'AUTOTEMP' to show Temp Schedule");
 		terminal.println("or 'HELLO' to say hello!");
 	}
 	// Ensure everything is sent
@@ -547,6 +569,7 @@ void MainFunction()			//Robi wszystko co powinien
 void setup()
 {
 	Serial.begin(115200);
+	WiFi.mode(WIFI_STA);
 	WiFi.begin(ssid, pass);
 	Blynk.config(auth);
 
