@@ -265,7 +265,7 @@ void TrybManAuto()			//Ustawienie trybów sterowania i temperatury do załączen
 void Read_BME280_Values()		//Odczyt wskazań z czujnika BME280
 {
 	BME280::TempUnit tempUnit(BME280::TempUnit_Celsius);
-	BME280::PresUnit presUnit(BME280::PresUnit_Pa);
+	BME280::PresUnit presUnit(BME280::PresUnit_hPa);
 
 	bme.read(pres, temp, hum, tempUnit, presUnit);
 	temp = temp -4.5;							//Korekta dla temperatury. BME280 się trochę grzeje 
@@ -289,8 +289,8 @@ float ReadSoilMoisture()		//Odczyt z czujnika wilgotności gleby i konwersja do 
 		sval = sval + analogRead(A0);	//sensor on analog pin 0
 	}
 	sval = sval / 5;
-	sval = map(sval, 814, 436, 0, 100);	//Convert to Relative Humidity in % (818 -> sensor in air, 427 -> sensor in water)
-	sval = constrain(sval, 0, 100);		//Limits range of sensor values to between 10 and 150
+	sval = map(sval, 847, 475, 0, 100);	//Convert to Relative Humidity in % (818 -> sensor in air, 427 -> sensor in water)
+	//sval = constrain(sval, 0, 100);		//Limits range of sensor values to between 10 and 150
 	//informacja o podlaniu
 	if (sval > 80 && Podlane == false)
 	{
@@ -329,6 +329,7 @@ void Room_Temp_Control()		//Sterowanie piecem w zależności od temperatury
 	if (Tryb_Sterownika == 1)
 	{
 		bridge1.digitalWrite(HeatCO, 0);	//Wysłanie sygnału do włączenia pieca
+		bridge1.virtualWrite(V18, true); 	//Wysłanie informacji do sterownika w łazience że piec grzeje
 		LED_CO.on();				//Piec CO grzeje
 		digitalWrite(LED_BUILTIN, LOW);		//Niebieska dioda WEMOSA gaśnie
 	}
@@ -336,12 +337,14 @@ void Room_Temp_Control()		//Sterowanie piecem w zależności od temperatury
 	{
 		bridge1.digitalWrite(HeatCO, 0);	//Wysłanie sygnału do włączenia pieca
 		LED_CO.on();				//Piec CO grzeje
+		bridge1.virtualWrite(V18, true); 	//Wysłanie informacji do sterownika w łazience że piec grzeje
 		digitalWrite(LED_BUILTIN, LOW);		//Niebieska dioda WEMOSA gaśnie
 	}
 	else if (temp > SetTempActual + TemtHist)
 	{
 		bridge1.digitalWrite(HeatCO, 1023);	//Wysłanie sygnału do wyłączenia pieca (1023 bo piny obsługują PWM i nadanie "1" nie działa)
 		LED_CO.off();				//Piec CO nie grzeje
+		bridge1.virtualWrite(V18, false); 	//Wysłanie informacji do sterownika w łazience że piec nie grzeje
 		digitalWrite(LED_BUILTIN, HIGH);	//Niebieska dioda WEMOSA świeci
 	}
 }

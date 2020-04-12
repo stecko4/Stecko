@@ -46,6 +46,7 @@ float		RoomHumid		= 0;		//Wilgotności w pokoju, potrzebna do wyznaczenia warto�
 int		PhotoResValue		= 0;		//Store value from photoresistor (0-1023)
 int		ProgPhotoresistor	= 300;		//Próg jasności od którego zacznie działać iluminacja sedesu (nie powinno podświetlać jeśli światło w łazience zapalone)
 boolean		isLED_Light		= false;	//TRUE jeśli diody świecą FALSE jeśli nie świecą
+boolean		HeatCO			= false;	//informacja wysyłana na V18 TRUE jeśli piec grzeje i FALSE jeśli nie grzeje (funkcja Bridge)
 float temp(NAN), hum(NAN), pres(NAN), dewPoint(NAN), absHum(NAN), heatIndex(NAN);
 
 //STAŁE
@@ -179,12 +180,12 @@ void Bathrum_Humidity_Control()		//Załączanie wentylatora w łazience jeśli w
 		digitalWrite(BathFan, HIGH);		//turn on relay with voltage HIGH
 		Blynk.virtualWrite(V8, 0);		//Wentylator Wyłączony
 	}
-	else if (Tryb_Sterownika == 1)			//Wilgotność w trybie ręcznym ON
+	else if (Tryb_Sterownika == 1 && HeatCO == false)			//Wilgotność w trybie ręcznym ON
 	{
 		digitalWrite(BathFan, LOW);		//turn on relay with voltage LOW
 		Blynk.virtualWrite(V8, 255);		//Wentylator włączony
 	}
-	else if (hum >= SetHumidActual + HumidHist)
+	else if (hum >= SetHumidActual + HumidHist && isLED_Light == false && HeatCO == false)
 	{
 		if (temp > 20 || analogRead(PhotoResistor) < ProgPhotoresistor)
 		{
@@ -197,7 +198,7 @@ void Bathrum_Humidity_Control()		//Załączanie wentylatora w łazience jeśli w
 			Blynk.virtualWrite(V8, 0);	//Wentylator Wyłączony
 		}
 	}
-	else if (hum <= SetHumidActual - HumidHist)
+	else if (hum <= SetHumidActual - HumidHist || HeatCO == true)
 	{
 		digitalWrite(BathFan, HIGH);		//turn on relay with voltage HIGH
 		Blynk.virtualWrite(V8, 0);		//Wentylator Wyłączony
@@ -207,7 +208,7 @@ void Bathrum_Humidity_Control()		//Załączanie wentylatora w łazience jeśli w
 void Read_BME280_Values()		//Odczyt wskazań z czujnika BME280
 {
 	BME280::TempUnit tempUnit(BME280::TempUnit_Celsius);
-	BME280::PresUnit presUnit(BME280::PresUnit_Pa);
+	BME280::PresUnit presUnit(BME280::PresUnit_hPa);
 
 	bme.read(pres, temp, hum, tempUnit, presUnit);
 	temp = temp -0.33;		//Korekta dla temperatury. BME280 się trochę grzeje 
@@ -288,6 +289,7 @@ BLYNK_WRITE(V40)			//Obsługa terminala
 		terminal.println("V5   ->  Heat Index         °C");
 		terminal.println("V10  <-  SetHumidManual     %");
 		terminal.println("V11  <-  Fan Manual & State 1,2,3,4");
+		terminal.println("V18  <-  HeatCO             0/1");
 		terminal.println("V25  ->  WiFi Signal        %");
 		terminal.println("V55  ->  PhotoResistor      -");
 		terminal.println("V56  ->  PIR_Sensor         0/1");
@@ -316,8 +318,9 @@ BLYNK_WRITE(V40)			//Obsługa terminala
 		terminal.print(heatIndex);
 		terminal.println(" °C");
 		terminal.print("V10    SetHumidManual =   ");
-		terminal.print(SetHumidManual);
-		terminal.println(" %");
+		terminal.println(SetHumidManual);
+		terminal.print("V18    HeatCO         =   ");
+		terminal.println(HeatCO);
 		terminal.print("V55    PhotoResistor  =   ");
 		terminal.println(analogRead(PhotoResistor));
 		terminal.print("V56    PIR_Sensor     =   ");
@@ -345,6 +348,11 @@ BLYNK_WRITE(V40)			//Obsługa terminala
 BLYNK_WRITE(V10)			//Ustawienie progu wilgotności powyżej którego włączy się wentylator (plus próg)
 {
 	SetHumidManual = param.asInt(); 
+}
+
+BLYNK_WRITE(V18)			//Informacja czy piec grzeje
+{
+    HeatCO = param.asFloat(); 		//pinData variable will store value that came via Bridge
 }
 
 BLYNK_WRITE(V21)			//Wilgotność w pokoju, przesyłana z Wemos D1
@@ -441,6 +449,7 @@ void setup()
 	{
 		Serial.println("Could not find a valid BME280 sensor, check wiring!");
 		while (1);
+		
 	}
 }
 

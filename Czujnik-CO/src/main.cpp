@@ -88,9 +88,9 @@ WidgetTerminal terminal(V40);	//Attach virtual serial terminal to Virtual Pin V4
 #include <SimpleTimer.h>
 SimpleTimer Timer;
 
-const char	ssid[]			= "XXXX";
-const char	pass[]			= "XXXX";
-const char	auth[]			= "XXXX";	//Token Łazienka Przychojec
+const char	ssid[]		= "XXXX";
+const char	pass[]		= "XXXX";
+const char	auth[]		= "XXXX";	//Token Łazienka Przychojec
 
 void blynkCheck()			//Sprawdza czy połączone z serwerem Blynk
 {
@@ -216,7 +216,7 @@ void Bathrum_Humidity_Control()		//Załączanie wentylatora w łazience jeśli w
 void Read_BME280_Values()		//Odczyt z czujnika BME280, temperatura, wilgotność i ciśnienie
 {
 	BME280::TempUnit tempUnit(BME280::TempUnit_Celsius);
-	BME280::PresUnit presUnit(BME280::PresUnit_Pa);
+	BME280::PresUnit presUnit(BME280::PresUnit_hPa);
 
 	bme.read(pres, temp, hum, tempUnit, presUnit);
 	temp = temp -0.33;		//Korekta dla temperatury. BME280 się trochę grzeje 

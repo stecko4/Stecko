@@ -34,7 +34,8 @@ int Check = 0 ;
 
 //Definicja stałych
 const unsigned long SleepTime = 10000 * 60 * 60;	//Wejście w stan DeepSleep na 1-dną godzinę (3600000000)
-const int PumpTime = 1000 * 10;				//Załączenie pompy na 10s
+const int PumpTimeKaki = 1000 * 30;			//Załączenie pompy na 10s
+const int PumpTimeMango = 1000 * 45;			//Załączenie pompy na 10s
 
 //---------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -42,15 +43,15 @@ void MoistureNotification()			//Wysyłanie powiadomień przez Blynk.notify() gdy
 {
 	if (Humidity_A < Prog_wilgotnosciA && Humidity_B < Prog_wilgotnosciB)
 	{
-		Blynk.notify("Oba avocado zostały podlane :)");
+		Blynk.notify("Obie rośliny zostały podlane :)");
 	}
 	else if (Humidity_B < Prog_wilgotnosciB)
 	{
-		Blynk.notify("Avocado szerokie zostało podlane :)");
+		Blynk.notify("Kaki zostało podlane :)");
 	}
 	else if (Humidity_A < Prog_wilgotnosciA)
 	{
-		Blynk.notify("Avocado wysokie zostało podlane :)");
+		Blynk.notify("Mango zostało podlane :)");
 	}
 }
 
@@ -96,14 +97,22 @@ void CheckSoilMoisture(int SoilMoistureSensor)	//Sprawdzenie poziomu wilgotnośc
 
 	if (SoilMoistureSensor == SoilMoistureSensorPower_A)
 	{
-		Humidity_A = map(sval, 790, 466, 0, 100); 		//Convert to Relative Humidity in % (818 -> sensor in air, 427 -> sensor in water)
+		Humidity_A = map(sval, 729, 420, 0, 100); 		//Convert to Relative Humidity in % (818 -> sensor in air, 427 -> sensor in water)
 		//Humidity_A = constrain(Humidity_A, 0, 100);		//Limits range of sensor values to between 0 and 100
+		Serial.print("A row value = ");
+		Serial.print(sval);
+		Serial.print("   Humidity% = ");
+		Serial.println(Humidity_A);
 
 	}
 	else if (SoilMoistureSensor == SoilMoistureSensorPower_B)
 	{
-		Humidity_B = map(sval, 800, 450, 0, 100);		//Convert to Relative Humidity in % (800 -> sensor in air, 427 -> sensor in water)
+		Humidity_B = map(sval, 774, 436, 0, 100);		//Convert to Relative Humidity in % (800 -> sensor in air, 427 -> sensor in water)
 		//Humidity_B = constrain(Humidity_B, 0, 100);		//Limits range of sensor values to between 0 and 100
+		Serial.print("B row value = ");
+		Serial.print(sval);
+		Serial.print("   Humidity% = ");
+		Serial.println(Humidity_B);
 	}
 }
 
@@ -114,7 +123,7 @@ void Watering()					//Załączenie pompy gdy wilgotność poniżej progu
 		digitalWrite(WaterPumpPower_A, LOW); //Włączenie pompy
 		digitalWrite(2, LOW);
 		Serial.println("Pompa A załączona");
-		delay(PumpTime);
+		delay(PumpTimeMango);
 		digitalWrite(2, HIGH);
 		Serial.println("Pompa A wyłączona");
 		digitalWrite(WaterPumpPower_A, HIGH);  //Wyłączenie pompy
@@ -127,7 +136,7 @@ void Watering()					//Załączenie pompy gdy wilgotność poniżej progu
 		digitalWrite(WaterPumpPower_B, LOW); //Włączenie pompy
 		digitalWrite(2, LOW);
 		Serial.println("Pompa B załączona");
-		delay(PumpTime);
+		delay(PumpTimeKaki);
 		digitalWrite(2, HIGH);
 		Serial.println("Pompa B wyłączona");
 		digitalWrite(WaterPumpPower_B, HIGH);  //Wyłączenie pompy
@@ -167,6 +176,7 @@ void setup()
 	pinMode(2, OUTPUT);						//Dioda LED
 
 	Serial.begin(115200);
+
 	while (!Serial)
 	{
 		 // wait for serial port to connect. Needed for native USB
@@ -176,5 +186,14 @@ void setup()
 void loop()
 {
 	if (Blynk.connected()) Blynk.run();
+	
 	Timer.run();
+/*
+	CheckSoilMoisture(SoilMoistureSensorPower_A);			//Odczyt wilgotności gleby z czujnika A [%]
+	CheckSoilMoisture(SoilMoistureSensorPower_B);			//Odczyt wilgotności gleby z czujnika B [%]
+	Serial.println("");
+	Serial.println("");
+	delay(1000);
+*/
+
 }
