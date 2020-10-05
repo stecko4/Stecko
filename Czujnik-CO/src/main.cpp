@@ -21,8 +21,7 @@ Objawy zatrucia
 #include "MutichannelGasSensor.h"
 
 //BME280 definition
-#include <EnvironmentCalculations.h>
-#include <Wire.h>
+#include <EnvironmentCalculations.h>	//https://github.com/finitespace/BME280/blob/master/src/EnvironmentCalculations.h
 #include <BME280I2C.h>
 BME280I2C::Settings settings(
    BME280::OSR_X1,
@@ -39,12 +38,11 @@ BME280I2C bme(settings);
 //for OTA
 #include <ESP8266mDNS.h>
 #include <WiFiUdp.h>
-#include <ArduinoOTA.h>
+#include <ArduinoOTA.h>			//https://github.com/esp8266/Arduino/tree/master/libraries/ArduinoOTA
 bool OTAConfigured = 0;
 
 //Wyswietlacz OLED
-#include <Arduino.h>
-#include <U8g2lib.h>
+#include <U8g2lib.h>			//https://github.com/olikraus/U8g2_Arduino
 U8G2_SH1106_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
 
 int		OLED_ON = 1;		//Deklaracja zmiennej załączenia wyświetlacza OLED gdy sygnał z aplikacji Blynk
@@ -83,16 +81,19 @@ c = gas.measure_C2H5OH();	// Ethanol C2H5OH 10 – 500ppm
 //#define BLYNK_DEBUG // Optional, this enables lots of prints
 //#define BLYNK_PRINT Serial
 #include <ESP8266WiFi.h>
-#include <BlynkSimpleEsp8266.h>
-WidgetTerminal terminal(V40);	//Attach virtual serial terminal to Virtual Pin V40
-#include <SimpleTimer.h>
+#include <BlynkSimpleEsp8266.h>		//https://github.com/blynkkk/blynk-library
+#include <SimpleTimer.h>		//https://github.com/jfturcot/SimpleTimer
 SimpleTimer Timer;
+WidgetTerminal terminal(V40);		//Attach virtual serial terminal to Virtual Pin V40
 
-const char	ssid[]		= "XXXX";
-const char	pass[]		= "XXXX";
-const char	auth[]		= "XXXX";	//Token Łazienka Przychojec
+const char	ssid[]	= "XXXX";
+const char	pass[]	= "XXXX";
+const char	auth[]	= "XXXX";	//Token Łazienka Przychojec
 
-void blynkCheck()			//Sprawdza czy połączone z serwerem Blynk
+//---------------------------------------------------------------------------------------------------------------------------------------------
+
+//Sprawdza czy połączone z serwerem Blynk
+void blynkCheck()
 {
 	if (WiFi.status() == WL_CONNECTED)		//WL_CONNECTED: assigned when connected to a WiFi network
 	{
@@ -134,13 +135,15 @@ void blynkCheck()			//Sprawdza czy połączone z serwerem Blynk
 	}
 }
 
-BLYNK_CONNECTED()			//Informacja że połączono z serwerem Blynk, synchronizacja danych
+//Informacja że połączono z serwerem Blynk, synchronizacja danych
+BLYNK_CONNECTED()
 {
 	Serial.println("Reconnected, syncing with cloud.");
 	Blynk.syncAll();
 }
 
-void OTA_Handle()			//Deklaracja OTA_Handle:
+//Obsługa OTA (Over The Air) wgrywanie nowego kodu przez Wi-Fi
+void OTA_Handle()
 {
 	if (OTAConfigured == 1)
 	{
@@ -201,7 +204,8 @@ void OTA_Handle()			//Deklaracja OTA_Handle:
 	}
 }
 
-void Bathrum_Humidity_Control()		//Załączanie wentylatora w łazience jeśli warunek spełniony
+//Załączanie wentylatora w łazience jeśli warunek spełniony
+void Bathrum_Humidity_Control()	
 {
 	if (hum >= SetHumid + HumidHist)
 	{
@@ -213,13 +217,14 @@ void Bathrum_Humidity_Control()		//Załączanie wentylatora w łazience jeśli w
 	}
 }
 
-void Read_BME280_Values()		//Odczyt z czujnika BME280, temperatura, wilgotność i ciśnienie
+//Odczyt z czujnika BME280, temperatura, wilgotność i ciśnienie
+void Read_BME280_Values()
 {
 	BME280::TempUnit tempUnit(BME280::TempUnit_Celsius);
 	BME280::PresUnit presUnit(BME280::PresUnit_hPa);
 
 	bme.read(pres, temp, hum, tempUnit, presUnit);
-	temp = temp -0.33;		//Korekta dla temperatury. BME280 się trochę grzeje 
+	temp = temp -1.33;		//Korekta dla temperatury. BME280 się trochę grzeje 
 	pres = pres + 24.634;		//Korekta dostosowująca do ciśnienia na poziomie morza
 	hum = hum;			//Korekta poziomu wilgotności odczytanegoe prze BME280.
 	
@@ -230,7 +235,8 @@ void Read_BME280_Values()		//Odczyt z czujnika BME280, temperatura, wilgotność
 	heatIndex = EnvironmentCalculations::HeatIndex(temp, hum, envTempUnit);
 }
 
-void MultiGas_Values()			//Odczyt z czujnika Grove-Multichannel_Gas_Sensor, stężenie CO i CH4
+//Odczyt z czujnika Grove-Multichannel_Gas_Sensor, stężenie CO i CH4
+void MultiGas_Values()
 {
 	//http://wiki.seeedstudio.com/Grove-Multichannel_Gas_Sensor/
 	Metan		= gas.measure_CH4();		// Methane CH4 >1000ppm
@@ -246,7 +252,8 @@ void MultiGas_Values()			//Odczyt z czujnika Grove-Multichannel_Gas_Sensor, stę
 	C2H5OH = gas.measure_C2H5OH();			// Ethanol C2H5OH 10 – 500ppm */
 }
 
-void MultiGas_ValuesALL()		//Odczyt z czujnika Grove-Multichannel_Gas_Sensor, stężenie CO i CH4
+//Odczyt z czujnika Grove-Multichannel_Gas_Sensor, wszystkie gazy
+void MultiGas_ValuesALL()
 {
 	//http://wiki.seeedstudio.com/Grove-Multichannel_Gas_Sensor/
 	Metan		= gas.measure_CH4();		// Methane CH4 > 1000ppm
@@ -259,7 +266,8 @@ void MultiGas_ValuesALL()		//Odczyt z czujnika Grove-Multichannel_Gas_Sensor, st
 	Ethanol		= gas.measure_C2H5OH();		// Ethanol C2H5OH 10 – 500ppm */
 }
 
-void OLED_Display()			//Włącza lub wyłącza wyświetlanie danych na ekranie OLED
+//Włącza lub wyłącza wyświetlanie danych na ekranie OLED
+void OLED_Display()
 {
 	if (OLED_ON == 1 || Alarm_Gazowy == 1)
 	{
@@ -283,7 +291,8 @@ void OLED_Display()			//Włącza lub wyłącza wyświetlanie danych na ekranie O
 	}
 }
 
-void Multi_Gas_Reset()			//Reset czujnika gazu
+//Reset czujnika gazu
+void Multi_Gas_Reset()
 {
 	gas.powerOff();
 	OLED_Display();
@@ -301,7 +310,8 @@ void Multi_Gas_Reset()			//Reset czujnika gazu
 	Tlenek_Wegla = gas.measure_CO();    // Carbon monoxide CO 1 – 1000ppm
 }
 
-void RozgrzewanieMetan()		//Rozgrzewanie czujnika gazu
+//Rozgrzewanie czujnika gazu
+void RozgrzewanieMetan()
 {
 	int Metan_initial = gas.measure_CH4();
 	u8g2.clearBuffer();
@@ -389,7 +399,8 @@ void RozgrzewanieMetan()		//Rozgrzewanie czujnika gazu
 	delay(1500);
 }
 
-void RozgrzewanieCO()			//Rozgrzewanie czujnika gazu
+//Rozgrzewanie czujnika gazu
+void RozgrzewanieCO()
 {
 	int CO_initial = gas.measure_CO();
 	u8g2.clearBuffer();
@@ -456,7 +467,8 @@ void RozgrzewanieCO()			//Rozgrzewanie czujnika gazu
 	delay(1500);
 }
 
-void Gas_Senor_Heating()		//Rozgrzewanie sensora gazu
+//Rozgrzewanie sensora gazu
+void Gas_Senor_Heating()
 {
 	Metan = gas.measure_CH4();		// Methane CH4 >1000ppm
 	Tlenek_Wegla = gas.measure_CO();	// Carbon monoxide CO 1 – 1000ppm
@@ -508,12 +520,14 @@ void Gas_Senor_Heating()		//Rozgrzewanie sensora gazu
 	}
 }
 
-int WiFi_Strength (long Signal)		//Zwraca siłę sygnału WiFi sieci do której jest podłączony w %. REF: https://www.adriangranados.com/blog/dbm-to-percent-conversion
+//Zwraca siłę sygnału WiFi sieci do której jest podłączony w %. REF: https://www.adriangranados.com/blog/dbm-to-percent-conversion
+int WiFi_Strength (long Signal)
 {
 	return constrain(round((-0.0154*Signal*Signal)-(0.3794*Signal)+98.182), 0, 100);
 }
 
-void Wyslij_Dane()			//Wysyła dane na serwer Blynk
+//Wysyła dane na serwer Blynk
+void Wyslij_Dane()
 {
 	//BME280
 	Blynk.virtualWrite(V0, temp);			//Temperatura [°C]
@@ -530,7 +544,8 @@ void Wyslij_Dane()			//Wysyła dane na serwer Blynk
 	Blynk.virtualWrite(V25, WiFi_Strength(WiFi.RSSI())); //Siła sygnału Wi-Fi [%]
 }
 
-BLYNK_WRITE(V40)			//Obsługa terminala
+//Obsługa terminala
+BLYNK_WRITE(V40)
 {
 	String TerminalCommand = param.asStr();
 	TerminalCommand.toLowerCase();
@@ -657,7 +672,8 @@ BLYNK_WRITE(V40)			//Obsługa terminala
 	terminal.flush();
 }
 
-void Alarm_Check()			//Funkcja sprawdza czy należy uruchomić alarm czyli włączyć ekran z informacją o stężeniu gazów i uruchomić buzer
+//Funkcja sprawdza czy należy uruchomić alarm czyli włączyć ekran z informacją o stężeniu gazów i uruchomić buzer
+void Alarm_Check()
 {
 	//Alarm dla przekroczenia stężenia CO
 	if (Alarm30 > 20)		//Stężenie CO utrzymuje się powyżej 30ppm przez ponad 120minut
@@ -706,7 +722,8 @@ void Alarm_Check()			//Funkcja sprawdza czy należy uruchomić alarm czyli włą
 	*/
 }
 
-void Gas_Alarms_Count()			//Funkcja uruchamiana co 1s dolicza sekundę do poszczególnych alarmów jeśli stężenie przekroczone określony próg
+//Funkcja uruchamiana co 1s dolicza sekundę do poszczególnych alarmów jeśli stężenie przekroczone określony próg
+void Gas_Alarms_Count()
 {
 	if (Tlenek_Wegla < 30)					//Zeruje czasy wszystkich alarmów
 	{
@@ -746,12 +763,14 @@ void Gas_Alarms_Count()			//Funkcja uruchamiana co 1s dolicza sekundę do poszcz
 	}
 }
 
-BLYNK_WRITE(V20)			//Włączanie i wyłączanie wyświetlacza z poziomu aplikacji BLYNK
+//Włączanie i wyłączanie wyświetlacza z poziomu aplikacji BLYNK
+BLYNK_WRITE(V20)
 {
 	OLED_ON = param.asInt(); 
 }
 
-BLYNK_WRITE(V21)			//Reset sensora gazu
+//Reset sensora gazu
+BLYNK_WRITE(V21)
 {
 	int GasReset = param.asInt(); 
 	if (GasReset == 1)
@@ -773,12 +792,14 @@ BLYNK_WRITE(V21)			//Reset sensora gazu
 	}
 }
 
-BLYNK_WRITE(V22)			//Uzbrajanie Alarmu
+//Uzbrajanie Alarmu
+BLYNK_WRITE(V22)
 {
 	AlarmActive = param.asInt(); 
 }
 
-void MainFunction()			//Robi wszystko co powinien
+//Uruchamia po kolei wszystkie niezbędne funcje
+void MainFunction()
 {
 	Read_BME280_Values();				//Odczyt danych z czujnika BME280
 	MultiGas_Values();				//Odczyt danych z czujnika Mutichannel_Gas_Sensor
@@ -787,7 +808,7 @@ void MainFunction()			//Robi wszystko co powinien
 	Wyslij_Dane();					//Wysyła dane do serwera Blynk
 }
 
-/***********************************************************************************************/
+//---------------------------------------------------------------------------------------------------------------------------------------------
 
 void setup()
 {

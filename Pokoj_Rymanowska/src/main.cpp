@@ -8,8 +8,7 @@ SDA (Serial Data)   ->  D2 on NodeMCU / Wemos D1 PRO
 SCK (Serial Clock)  ->  D1 on NodeMCU / Wemos D1 PRO */
 
 //BME280 definition
-#include <EnvironmentCalculations.h>
-#include <Wire.h>
+#include <EnvironmentCalculations.h>			//https://github.com/finitespace/BME280/blob/master/src/EnvironmentCalculations.h
 #include <BME280I2C.h>
 BME280I2C::Settings settings(
    BME280::OSR_X1,
@@ -24,22 +23,21 @@ BME280I2C::Settings settings(
 BME280I2C bme(settings);
 
 //Wyświetlacz OLED
-#include <Arduino.h>
 #include <U8g2lib.h>
 U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
 
 //for OTA
 #include <ESP8266mDNS.h>
 #include <WiFiUdp.h>
-#include <ArduinoOTA.h>
+#include <ArduinoOTA.h>					//https://github.com/esp8266/Arduino/tree/master/libraries/ArduinoOTA
 bool OTAConfigured = 0;
 
-//#define BLYNK_DEBUG			//Optional, this enables lots of prints
+//#define BLYNK_DEBUG					//Optional, this enables lots of prints
 //#define BLYNK_PRINT Serial
-#include <ESP8266WiFi.h>
-#include <BlynkSimpleEsp8266.h>
-#include <SimpleTimer.h>
-#include <TimeLib.h>
+#include <ESP8266WiFi.h>          			//ESP8266 Core WiFi Library (you most likely already have this in your sketch)
+#include <BlynkSimpleEsp8266.h>				//https://github.com/blynkkk/blynk-library
+#include <SimpleTimer.h>				//https://github.com/jfturcot/SimpleTimer
+#include <TimeLib.h>					//https://github.com/PaulStoffregen/Time
 #include <WidgetRTC.h>
 WidgetBridge bridge1(V20);				//Initiating Bridge Widget on V20 of Device A
 WidgetTerminal terminal(V40);				//Attach virtual serial terminal to Virtual Pin V40
@@ -69,8 +67,8 @@ boolean		SoilNotification50	= false;	//Przyjmuje wartość true gdy wysłano not
 float		RH 			= 0;		//Soil Relative Humidity in % 
 long		CZAS_START_MANUAL	= 0;		//Ustawienie czasu przejścia sterowania w trym MANUAL (wartość w sekundach)
 long		CZAS_START_AUTO		= 0;		//Ustawienie czasu przejścia sterowania w trym AUTO (wartość w sekundach)
-int		dzien			= 0;		// day of the week (1-7), Sunday is day 1
-int		godz			= 1;		// the hour now (0-23)
+int		dzien			= 0;		//day of the week (1-7), Sunday is day 1
+int		godz			= 1;		//the hour now (0-23)
 float		temp(NAN), hum(NAN), pres(NAN), dewPoint(NAN), absHum(NAN), heatIndex(NAN);	//Zmienne dla danych z czujnika BME280
 
 //STAŁE
@@ -85,7 +83,8 @@ const float	HumidHist		= 5;		//histereza dla wilgotności
 
 //---------------------------------------------------------------------------------------------------------------------------------------------
 
-BLYNK_CONNECTED()			//Informacja że połączono z serwerem Blynk, synchronizacja danych
+//Informacja że połączono z serwerem Blynk, synchronizacja danych
+BLYNK_CONNECTED()
 {
 	Serial.println("Reconnected, syncing with cloud.");
 	bridge1.setAuthToken("XXXX"); // Token of the hardware B (Łazienka)
@@ -93,7 +92,8 @@ BLYNK_CONNECTED()			//Informacja że połączono z serwerem Blynk, synchronizacj
 	Blynk.syncAll();
 }
 
-void blynkCheck()			//Sprawdza czy połączone z serwerem Blynk
+//Sprawdza czy połączone z serwerem Blynk
+void blynkCheck()
 {
 	if (WiFi.status() == WL_CONNECTED)		//WL_CONNECTED: assigned when connected to a WiFi network
 	{
@@ -135,7 +135,8 @@ void blynkCheck()			//Sprawdza czy połączone z serwerem Blynk
 	}
 }
 
-void OTA_Handle()			//Deklaracja OTA_Handle:
+//Over-The-Air w skrócie OTA umożliwia przesyłanie plików do urządzeń przez sieć WiFi
+void OTA_Handle()
 {
 	if (OTAConfigured == 1)
 	{
@@ -196,7 +197,8 @@ void OTA_Handle()			//Deklaracja OTA_Handle:
 	}
 }
 
-void TrybManAuto()			//Ustawienie trybów sterowania i temperatury do załączenia pieca CO
+//Ustawienie trybów sterowania i temperatury do załączenia pieca CO
+void TrybManAuto()
 {
 	//Start Manual za pomocą Time Input
 	if (CZAS_START_MANUAL > 0 && hour(now()) * 60 + minute(now()) == CZAS_START_MANUAL / 60)	//Tryb_Sterownika 0 = AUTO, 1 = ON, 2 = OFF, 3 = MANUAL
@@ -262,7 +264,8 @@ void TrybManAuto()			//Ustawienie trybów sterowania i temperatury do załączen
 	}
 }
 
-void Read_BME280_Values()		//Odczyt wskazań z czujnika BME280
+//Odczyt wskazań z czujnika BME280
+void Read_BME280_Values()
 {
 	BME280::TempUnit tempUnit(BME280::TempUnit_Celsius);
 	BME280::PresUnit presUnit(BME280::PresUnit_hPa);
@@ -279,17 +282,24 @@ void Read_BME280_Values()		//Odczyt wskazań z czujnika BME280
 	heatIndex = EnvironmentCalculations::HeatIndex(temp, hum, envTempUnit);
 }
 
-float ReadSoilMoisture()		//Odczyt z czujnika wilgotności gleby i konwersja do wartości 0 - 100%
+//Działą jak map() ale zwraca liczby rzeczywiste a nie tylko całkowite
+double mapf(double val, double in_min, double in_max, double out_min, double out_max)
+{
+    return (val - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+}
+
+//Odczyt z czujnika wilgotności gleby i konwersja do wartości 0 - 100%
+float ReadSoilMoisture()
 {
 	int i;
-	float sval = 0;
+	double sval = 0;
 
 	for (i = 0; i < 5; i++)
 	{		//Uśrednianie wartości z czujnika analogowego
-		sval = sval + analogRead(A0);	//sensor on analog pin 0
+		sval = sval + analogRead(A0);	// Soilmoisture sensor is connected to GPIO 34 (Analog ADC1_CH6)
 	}
 	sval = sval / 5;
-	sval = map(sval, 847, 475, 0, 100);	//Convert to Relative Humidity in % (818 -> sensor in air, 427 -> sensor in water)
+	sval = mapf(sval, 847, 475, 0, 100);	//Convert to Relative Humidity in % (818 -> sensor in air, 427 -> sensor in water)
 	//sval = constrain(sval, 0, 100);		//Limits range of sensor values to between 10 and 150
 	//informacja o podlaniu
 	if (sval > 80 && Podlane == false)
@@ -324,7 +334,8 @@ float ReadSoilMoisture()		//Odczyt z czujnika wilgotności gleby i konwersja do 
 return sval;
 }
 
-void Room_Temp_Control()		//Sterowanie piecem w zależności od temperatury
+//Sterowanie piecem w zależności od temperatury
+void Room_Temp_Control()
 {
 	if (Tryb_Sterownika == 1)
 	{
@@ -349,7 +360,8 @@ void Room_Temp_Control()		//Sterowanie piecem w zależności od temperatury
 	}
 }
 
-void OLED_Display()			//Wyświetlanie na ekranie OLED 0.96"
+//Wyświetlanie na ekranie OLED 0.96"
+void OLED_Display()
 {
 	if (OLED_ON == 1)
 	{
@@ -406,12 +418,14 @@ void OLED_Display()			//Wyświetlanie na ekranie OLED 0.96"
 	}
 }
 
-int WiFi_Strength (long Signal)		//Zwraca siłę sygnału WiFi sieci do której jest podłączony w %. REF: https://www.adriangranados.com/blog/dbm-to-percent-conversion
+//Zwraca siłę sygnału WiFi sieci do której jest podłączony w %. REF: https://www.adriangranados.com/blog/dbm-to-percent-conversion
+int WiFi_Strength (long Signal)
 {
 	return constrain(round((-0.0154*Signal*Signal)-(0.3794*Signal)+98.182), 0, 100);
 }
 
-void Wyslij_Dane()			//Wysyłanie danych na serwer Blynka
+//Wysyłanie danych na serwer Blynka
+void Wyslij_Dane()
 {
 	Blynk.virtualWrite(V0, temp);				//Temperatura [°C]
 	Blynk.virtualWrite(V1, hum);				//Wilgotność [%]
@@ -425,7 +439,8 @@ void Wyslij_Dane()			//Wysyłanie danych na serwer Blynka
 	bridge1.virtualWrite(V21, hum);				//Wilgotność w pokoju wysyłana do sterownika w łazience [%]
 }
 
-BLYNK_WRITE(V40)			//Obsługa terminala
+//Obsługa terminala
+BLYNK_WRITE(V40)
 {
 	String TerminalCommand = param.asStr();
 	TerminalCommand.toLowerCase();
@@ -520,12 +535,14 @@ BLYNK_WRITE(V40)			//Obsługa terminala
 	terminal.flush();
 }
 
-BLYNK_WRITE(V10)			//Włączanie i wyłączanie wyświetlacza
+//Włączanie i wyłączanie wyświetlacza
+BLYNK_WRITE(V10)
 {
 	OLED_ON = param.asInt(); 
 }
 
-BLYNK_WRITE(V11)			//Sterowanie ogrzewaniem z aplikacji (AUTO, ON, OFF, MAN)
+//Sterowanie ogrzewaniem z aplikacji (AUTO, ON, OFF, MAN)
+BLYNK_WRITE(V11)
 {
 	switch (param.asInt())
 	{
@@ -546,18 +563,21 @@ BLYNK_WRITE(V11)			//Sterowanie ogrzewaniem z aplikacji (AUTO, ON, OFF, MAN)
 	}
 }
 
-BLYNK_WRITE(V12)			//Ustawienie progu temperatury poniżej której załączy się CO (plus próg)
+//Ustawienie progu temperatury poniżej której załączy się CO (plus próg)
+BLYNK_WRITE(V12)
 {
 	SetTempManual = param.asFloat();
 }
 
-BLYNK_WRITE(V13)			//Obsługa timera Start Manual i Start Auto (Time Input Widget)
+//Obsługa timera Start Manual i Start Auto (Time Input Widget)
+BLYNK_WRITE(V13)
 {
 	CZAS_START_MANUAL = param[0].asLong();		//Ustawienie czasu przejścia sterowania w trym MANUAL (wartość w sekundach)
 	CZAS_START_AUTO = param[1].asLong();		//Ustawienie czasu przejścia sterowania w trym AUTO (wartość w sekundach)
 }
 
-void MainFunction()			//Robi wszystko co powinien
+//Uruchamia po kolei wszystkie niezbędne funcje
+void MainFunction()
 {
 	Read_BME280_Values();		//Odczyt danych z czujnika BME280
 	TrybManAuto();			//Ustawienie trybów sterowania i temperatury do załączenia pieca CO
@@ -567,11 +587,12 @@ void MainFunction()			//Robi wszystko co powinien
 	Wyslij_Dane();			//Wysyła dane do serwera Blynk
 }
 
-/***********************************************************************************************/
+//---------------------------------------------------------------------------------------------------------------------------------------------
 
 void setup()
 {
 	Serial.begin(115200);
+
 	WiFi.mode(WIFI_STA);
 	WiFi.begin(ssid, pass);
 	Blynk.config(auth);
@@ -600,7 +621,7 @@ void setup()
 	//u8g2.setCursor(0, 50);
 	//u8g2.print(clock.dateFormat("d-m-Y H:i:s", dt));
 	u8g2.setCursor(0, 64);
-	u8g2.print("Connecting to: "+String(ssid));
+	//u8g2.print("Connecting to: "+String(ssid));
 	u8g2.sendBuffer();
 
 	//inicjowanie czujnika BME280
