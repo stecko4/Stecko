@@ -26,8 +26,10 @@ const int ThermistorPIN = A0;				// ESP8266 Analog Pin ADC0 = A0
 float pad = 12000;					// balance/pad resistor value, set this to the measured resistance of your pad resistor
 
 int		Tryb_Sterownika		= 0;		//Tryb_Sterownika 0 = AUTO, 1 = ON, 2 = OFF, 3 = MANUAL
-float		SetTempActual		= 60;		//Temperatura według której sterowana jest temperatura (auto lub manual)
-int		GrowLampStatus		= 0;		//Domyślnie lampa wyłączona (0 = OFF, 1 = ON)
+float		SetTempActual		= 60;		//Temperatura według której załączany jest wentylator
+boolean		GrowLampStatus		= false;	//Domyślnie lampa wyłączona		(false = OFF, true = ON)
+boolean		FanStatus		= false;	//Domyślnie wentylator wyłączony	(false = OFF, true = ON)
+boolean		LampTempHigh		= false;	//Alarm gdy temperatura lampy przekroczy zbyt wysoka wartość
 int		StartHour		= 0;		//Godzina włączenia lampy
 int 		StartMinute		= 0;		//Minuta włączenia lampy
 int		StopHour		= 0;		//Godzina wyłączenia lampy
@@ -45,7 +47,8 @@ const char	auth[]			= "XXXX";	//Token Pokój Rymanowska
 const int	PlantLED		= D5;		//Pin do włączania światła LED
 const int	Fan			= D6;		//Pin do włączania wentylatora
 const int	Moisture		= D7;		//Pin do włączania nawilżacza powietrza
-const float	TemtHist		= 10;		//histereza dla temperatury
+const float	TemtHist		= 10;		//Histereza dla temperatury
+const float	TempAlarm		= 70;		//Maksymala dozwolona temperatura lampy
 
 //---------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -168,42 +171,54 @@ void TrybManAuto()
 	dzien = weekday(now());					//day of the week (1-7), Sunday is day 1
 	godzina = hour(now());					//the hour now  (0-23)
 	minuta =  minute(now());				//the minute now (0-59)
-	
+	/*
+	if (temp > 70 && GrowLampStatus == true)		//Zabezpieczenie przed przegrzaniem, jeśli temeratura wzrośnie powyżej 80°C lampa zostanie wyłączona
+	{
+		GrowLampStatus = false; 
+		WidgetLamp.off();				//Widget lampa wyłączona
+		digitalWrite(PlantLED, LOW);			//Lampa wyłączona
+		WigdetFan.on();					//Widget dioda zaświecona
+		digitalWrite(Fan, HIGH);			//Wentylator załączony
+		FanStatus = true;
+	}
+	else if (GrowLampStatus == false && FanStatus == false)	//Zabezpieczenie przed przegrzaniem, lampa może być włączona jeśli temperatura spadnie poniżej SetTempActual - TemtHist
+	{
+	*/
 	if (Tryb_Sterownika == 0 && DayOfWeek[dzien-1] && godzina * 60 + minuta >= StartHour * 60 + StartMinute && godzina * 60 + minuta < StopHour * 60 + StopMinute && StartHour != -1 && StartMinute != -1 && StopHour != -1 && StopMinute != -1)		//Tryb AUTO ON
 	{					//Tryb AUTO
-		if(GrowLampStatus == 0)
+		if(GrowLampStatus == false)
 		{
-			GrowLampStatus = 1; 
-			WidgetLamp.on();			//Widget lampa włączona
-			digitalWrite(PlantLED, HIGH);		//Lampa włączona
+			GrowLampStatus = true; 
+			WidgetLamp.on();		//Widget lampa włączona
+			digitalWrite(PlantLED, HIGH);	//Lampa włączona
 		}
 	}
 	else if (Tryb_Sterownika == 0 && (!DayOfWeek[dzien-1] || godzina * 60 + minuta < StartHour * 60 + StartMinute || godzina * 60 + minuta >= StopHour * 60 + StopMinute || StartHour == -1 || StartMinute == -1 || StopHour == -1 || StopMinute == -1))	//Tryb AUTO OFF
 	{					//Tryb AUTO
-		if(GrowLampStatus == 1)
+		if(GrowLampStatus == true)
 		{
-			GrowLampStatus = 0; 
-			WidgetLamp.off();			//Widget lampa wyłączona
-			digitalWrite(PlantLED, LOW);		//Lampa wyłączona
+			GrowLampStatus = false; 
+			WidgetLamp.off();		//Widget lampa wyłączona
+			digitalWrite(PlantLED, LOW);	//Lampa wyłączona
 
 		}		
 	}
 	else if (Tryb_Sterownika == 1)		//Tryb ON
 	{
-		if(GrowLampStatus != 1)
+		if(GrowLampStatus == false)
 		{
-			GrowLampStatus = 1;
-			WidgetLamp.on();			//Widget lampa włączona
-			digitalWrite(PlantLED, HIGH);		//Lampa włączona
+			GrowLampStatus = true;
+			WidgetLamp.on();		//Widget lampa włączona
+			digitalWrite(PlantLED, HIGH);	//Lampa włączona
 		}
 	}
 	else if (Tryb_Sterownika == 2)		//Tryb OFF
 	{
-		if(GrowLampStatus != 0)
+		if(GrowLampStatus == true)
 		{
-			GrowLampStatus = 0;
-			WidgetLamp.off();			//Widget lampa wyłączona
-			digitalWrite(PlantLED, LOW);		//Wentylator wyłączony
+			GrowLampStatus = false;
+			WidgetLamp.off();		//Widget lampa wyłączona
+			digitalWrite(PlantLED, LOW);	//Wentylator wyłączony
 		}
 	}
 }
@@ -215,11 +230,13 @@ void Fan_Control()
 	{
 		WigdetFan.on();					//Widget dioda zaświecona
 		digitalWrite(Fan, HIGH);			//Wentylator załączony
+		FanStatus = true;
 	}
 	else if (temp < SetTempActual - TemtHist)
 	{
 		WigdetFan.off();				//Widget dioda zgaszona
 		digitalWrite(Fan, LOW);				//Wentylator wyłączony
+		FanStatus = false;
 	}
 }
 
@@ -230,14 +247,36 @@ float Thermistor(int RawADC) {
 
 	//Steinhart-Hart Thermistor Equation:
 	//* Temperature in Kelvin = 1 / {A + B[ln(R)] + C[ln(R)]3}
-	//* where A = 0.000336479344094766, B = 0.000309212975364492 and C = -0.0000000487757964524903
+	//* where A = 0.001772142418285400, B = 0.000103543286621499 and C = 0.0000007220186952405760
 
-	Resistance=((1024 * pad / RawADC) - pad); 
+
+	Resistance = ((1024 * pad / RawADC) - pad);		//Rezystancja zmieżona [Ohm]
+
+	//Serial.print("Resistance = ");
+	//Serial.print(Resistance);
+	//Serial.print(" Ohm   ");
+
 	Temp = log(Resistance);					//Saving the Log(resistance) so not to calculate  it 4 times later
-	Temp = 1 / (0.000336479344094766 + (0.000309212975364492 * Temp) + (-0.0000000487757964524903 * Temp * Temp * Temp));
-	Temp = Temp - 273.15;					//Convert Kelvin to Celsius                      
+	Temp = 1 / (0.001772142418285400 + (0.000103543286621499 * Temp) + (0.0000007220186952405760 * Temp * Temp * Temp));
+	Temp = Temp - 273.15;					//Convert Kelvin to Celsius 
 
+	//Serial.print("temp = ");
+	//Serial.print(Temp,2);
+	//Serial.print("°C");
+	if (Temp >= TempAlarm)
+	{	if (LampTempHigh == false)
+		{
+			Blynk.notify("Temperatura lampy przekroczyła " + String(Temp) + "°C !");
+			LampTempHigh = true;
+		}
+	}
 	return Temp;						//Return the Temperature
+}
+
+//funkcja nie używana. Tylko do zbierania charakterystyki termistora 
+void TermistorTest(){
+	temp = Thermistor(analogRead(ThermistorPIN));		// read ADC and  convert it to Celsius
+	Serial.println(" ");
 }
 
 //Zwraca siłę sygnału WiFi sieci do której jest podłączony w %. REF: https://www.adriangranados.com/blog/dbm-to-percent-conversion
@@ -337,8 +376,29 @@ BLYNK_WRITE(V13)
 void MainFunction()
 {	
   	temp = Thermistor(analogRead(ThermistorPIN));		// read ADC and  convert it to Celsius
-	TrybManAuto();
-	Fan_Control();
+	if (LampTempHigh == true)
+	{	
+		if (temp > TempAlarm - 15)
+		{
+			WidgetLamp.off();				//Widget lampa wyłączona
+			digitalWrite(PlantLED, LOW);			//Lampa wyłączona
+			GrowLampStatus = false; 
+			WigdetFan.on();					//Widget dioda zaświecona
+			digitalWrite(Fan, HIGH);			//Wentylator załączony
+			FanStatus = true;	
+		}
+		else
+		{
+			Blynk.notify("Temperatura lampy spadła do " + String(temp) + "°C !");
+			LampTempHigh = false;
+		}
+	}
+	else
+	{
+		TrybManAuto();
+		Fan_Control();
+	}
+
 	Wyslij_Dane();
 }
 
@@ -354,6 +414,7 @@ void setup() {
 	//Inicjalizacja Timerów
 	Timer.setInterval(30000, blynkCheck);		//Co 30s zostanie sprawdzony czy jest sieć Wi-Fi i czy połączono z serwerem Blynk
 	Timer.setInterval(3000, MainFunction);		//Uruchamia wszystko w pętli co 3s
+	//Timer.setInterval(2000, TermistorTest);	//tylko do zbierania charakterystyki termistora
 
 	//Ustawianie pinów
 	pinMode(PlantLED, OUTPUT);
