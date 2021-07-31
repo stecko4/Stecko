@@ -1,5 +1,17 @@
 #include <Arduino.h>
 
+
+//AutoConnect https://hieromon.github.io/AutoConnect/
+#include <ESP8266WiFi.h>
+#include <ESP8266WebServer.h>
+#include <AutoConnect.h>
+
+//WiFiWebServer Server;
+ESP8266WebServer	Server;		// Replace with WebServer for ESP32
+AutoConnect		Portal(Server);
+AutoConnectConfig	Config;
+
+
 //for OTA
 #include <ESP8266mDNS.h>
 #include <WiFiUdp.h>
@@ -8,7 +20,7 @@ bool OTAConfigured = 0;
 
 //#define BLYNK_DEBUG					//Optional, this enables lots of prints
 //#define BLYNK_PRINT Serial
-#include <ESP8266WiFi.h>          			//ESP8266 Core WiFi Library (you most likely already have this in your sketch)
+//#include <ESP8266WiFi.h> declared for AutoConnect     //ESP8266 Core WiFi Library (you most likely already have this in your sketch)
 #include <BlynkSimpleEsp8266.h>				//https://github.com/blynkkk/blynk-library
 #include <SimpleTimer.h>				//https://github.com/jfturcot/SimpleTimer
 #include <TimeLib.h>					//https://github.com/PaulStoffregen/Time				
@@ -41,9 +53,9 @@ int		minuta			= 0;		// the minute now (0-59)
 float		temp			= 0;		//temperatura radiatora zczytana z termistora
 
 //STAŁE
-const char	ssid[]			= "XXXX";	//Nazwa sieci WiFi (Service Set Identifier)
-const char	pass[]			= "XXXX";	//Hasło do sieci WiFi
-const char	auth[]			= "XXXX";	//Token Pokój Rymanowska
+const char	ssid[]			= "ECN";	//Nazwa sieci WiFi (Service Set Identifier)
+const char	pass[]			= "Pecherek1987";//Hasło do sieci WiFi
+const char	auth[]			= "7ee4a4fee7f74a7596a37458bdef6168";	//Token Pokój Rymanowska
 const int	PlantLED		= D5;		//Pin do włączania światła LED
 const int	Fan			= D6;		//Pin do włączania wentylatora
 const int	Moisture		= D7;		//Pin do włączania nawilżacza powietrza
@@ -171,26 +183,13 @@ void TrybManAuto()
 	dzien = weekday(now());					//day of the week (1-7), Sunday is day 1
 	godzina = hour(now());					//the hour now  (0-23)
 	minuta =  minute(now());				//the minute now (0-59)
-	/*
-	if (temp > 70 && GrowLampStatus == true)		//Zabezpieczenie przed przegrzaniem, jeśli temeratura wzrośnie powyżej 80°C lampa zostanie wyłączona
-	{
-		GrowLampStatus = false; 
-		WidgetLamp.off();				//Widget lampa wyłączona
-		digitalWrite(PlantLED, LOW);			//Lampa wyłączona
-		WigdetFan.on();					//Widget dioda zaświecona
-		digitalWrite(Fan, HIGH);			//Wentylator załączony
-		FanStatus = true;
-	}
-	else if (GrowLampStatus == false && FanStatus == false)	//Zabezpieczenie przed przegrzaniem, lampa może być włączona jeśli temperatura spadnie poniżej SetTempActual - TemtHist
-	{
-	*/
 	if (Tryb_Sterownika == 0 && DayOfWeek[dzien-1] && godzina * 60 + minuta >= StartHour * 60 + StartMinute && godzina * 60 + minuta < StopHour * 60 + StopMinute && StartHour != -1 && StartMinute != -1 && StopHour != -1 && StopMinute != -1)		//Tryb AUTO ON
 	{					//Tryb AUTO
 		if(GrowLampStatus == false)
 		{
 			GrowLampStatus = true; 
 			WidgetLamp.on();		//Widget lampa włączona
-			digitalWrite(PlantLED, HIGH);	//Lampa włączona
+			digitalWrite(PlantLED, LOW);	//Lampa włączona
 		}
 	}
 	else if (Tryb_Sterownika == 0 && (!DayOfWeek[dzien-1] || godzina * 60 + minuta < StartHour * 60 + StartMinute || godzina * 60 + minuta >= StopHour * 60 + StopMinute || StartHour == -1 || StartMinute == -1 || StopHour == -1 || StopMinute == -1))	//Tryb AUTO OFF
@@ -199,7 +198,7 @@ void TrybManAuto()
 		{
 			GrowLampStatus = false; 
 			WidgetLamp.off();		//Widget lampa wyłączona
-			digitalWrite(PlantLED, LOW);	//Lampa wyłączona
+			digitalWrite(PlantLED, HIGH);	//Lampa wyłączona
 
 		}		
 	}
@@ -209,7 +208,7 @@ void TrybManAuto()
 		{
 			GrowLampStatus = true;
 			WidgetLamp.on();		//Widget lampa włączona
-			digitalWrite(PlantLED, HIGH);	//Lampa włączona
+			digitalWrite(PlantLED, LOW);	//Lampa włączona
 		}
 	}
 	else if (Tryb_Sterownika == 2)		//Tryb OFF
@@ -218,7 +217,7 @@ void TrybManAuto()
 		{
 			GrowLampStatus = false;
 			WidgetLamp.off();		//Widget lampa wyłączona
-			digitalWrite(PlantLED, LOW);	//Wentylator wyłączony
+			digitalWrite(PlantLED, HIGH);	//Wentylator wyłączony
 		}
 	}
 }
@@ -229,13 +228,13 @@ void Fan_Control()
 	 if (temp > SetTempActual)
 	{
 		WigdetFan.on();					//Widget dioda zaświecona
-		digitalWrite(Fan, HIGH);			//Wentylator załączony
+		digitalWrite(Fan, LOW);			//Wentylator załączony
 		FanStatus = true;
 	}
 	else if (temp < SetTempActual - TemtHist)
 	{
 		WigdetFan.off();				//Widget dioda zgaszona
-		digitalWrite(Fan, LOW);				//Wentylator wyłączony
+		digitalWrite(Fan, HIGH);				//Wentylator wyłączony
 		FanStatus = false;
 	}
 }
@@ -310,12 +309,15 @@ BLYNK_WRITE(V11)
 			default:				//Wartość domyślna AUTO
 			Tryb_Sterownika = 0;
 	}
+	TrybManAuto();
+
 }
 
 //Ustawienie progu temperatury poniżej której załączy się wentylator
 BLYNK_WRITE(V12)
 {
 	SetTempActual = param.asFloat();
+	Fan_Control();
 }
 
 //Obsługa timera Start i Stop (Time Input Widget)
@@ -407,8 +409,20 @@ void MainFunction()
 void setup() {
   Serial.begin(115200);
 
-	WiFi.mode(WIFI_STA);				//Station mode (aka STA mode or WiFi client mode). ESP32 connects to an access point.
-	WiFi.begin(ssid, pass);
+	// Autoconnect
+	Config.hostName = "Avocado";		// Sets host name to SotAp identification
+	//Config.homeUri = "/_ac";		// Sets home path of Sketch application
+	Config.retainPortal = true;		// Launch the captive portal on-demand at losing WiFi
+	Config.autoReconnect = true;		// Enable auto-reconnect
+	Config.ota = AC_OTA_BUILTIN;
+	Portal.config(Config);    		// Don't forget it.
+	if (Portal.begin())
+	{	
+		Serial.println("WiFi connected: " + WiFi.localIP().toString());
+	}
+
+	//WiFi.mode(WIFI_STA);				//Station mode (aka STA mode or WiFi client mode). ESP32 connects to an access point.
+	//WiFi.begin(ssid, pass);
 	Blynk.config(auth);
 
 	//Inicjalizacja Timerów
@@ -421,10 +435,22 @@ void setup() {
 	pinMode(Fan, OUTPUT);
 	pinMode(Moisture, OUTPUT);
 
+	blynkCheck(); 					//Piewsze połaczenie z Blynk, nie trzeba czekać 30s po restarcie
+
 }
 
 void loop() {
-	if (Blynk.connected()) Blynk.run();
-	Timer.run();
-	OTA_Handle();			//Obsługa OTA (Over The Air) wgrywanie nowego kodu przez Wi-Fi
+	if (WiFi.status() == WL_CONNECTED)
+	{
+		// Here to do when WiFi is connected.
+		if (Blynk.connected()) Blynk.run();
+		Timer.run();
+		OTA_Handle();			//Obsługa OTA (Over The Air) wgrywanie nowego kodu przez Wi-Fi
+	}
+	else
+	{
+		//Jeśli nie ma połączenia z siecią to po prostu steruje terrarium na ostatnich pustawieniach
+		Fan_Control();
+	}
+	Portal.handleClient();
 }

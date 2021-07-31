@@ -10,16 +10,17 @@ SCK (Serial Clock)  ->  D1 on NodeMCU / Wemos D1 PRO */
 //BME280 definition
 #include <EnvironmentCalculations.h>			//https://github.com/finitespace/BME280/blob/master/src/EnvironmentCalculations.h
 #include <BME280I2C.h>
+#include <Wire.h>
 BME280I2C::Settings settings(
-   BME280::OSR_X1,
-   BME280::OSR_X1,
-   BME280::OSR_X1,
-   BME280::Mode_Forced,
-   BME280::StandbyTime_125ms,
-   BME280::Filter_Off,
-   BME280::SpiEnable_False
-   //BME280I2C::I2CAddr_0x76 // I2C address. I2C specific.
-   );
+	BME280::OSR_X1,
+	BME280::OSR_X1,
+	BME280::OSR_X1,
+	BME280::Mode_Forced,
+	BME280::StandbyTime_125ms,
+	BME280::Filter_Off,
+	BME280::SpiEnable_False,
+	BME280I2C::I2CAddr_0x76 // I2C address. I2C specific.
+	);
 BME280I2C bme(settings);
 
 //Wyświetlacz OLED
@@ -50,12 +51,12 @@ float		SetTempManual		= 21;		//Temperatura nastawiana manualnie z aplikacji Blyn
 float		SetTempActual		= 18.5;		//Temperatura według której sterowana jest temperatura (auto lub manual)
 float		SetTempSchedule[7][24]	= {
 //00:00 01:00 02:00 03:00 04:00 05:00 06:00 07:00 08:00 09:00 10:00 11:00 12:00 13:00 14:00 15:00 16:00 17:00 18:00 19:00 20:00 21:00 22:00 23:00
-  {18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.8, 20.8, 20.8, 20.8, 20.8, 20.8, 20.8, 20.8, 20.8, 18.5 },  //Niedziela
-  {18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.8, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.8, 20.8, 20.8, 20.8, 20.8, 20.8, 20.8, 20.8, 18.5 },  //Poniedziałek
-  {18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.8, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.8, 20.8, 20.8, 20.8, 20.8, 20.8, 20.8, 20.8, 18.5 },  //Wtorek
-  {18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.8, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.8, 20.8, 20.8, 20.8, 20.8, 20.8, 20.8, 20.8, 18.5 },  //Środa
-  {18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.8, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.8, 20.8, 20.8, 20.8, 20.8, 20.8, 20.8, 20.8, 18.5 },  //Czwartek
-  {18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.8, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.8, 20.8, 20.8, 20.8, 20.8, 20.8, 20.8, 20.8, 18.5 },  //Piątek
+  {18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.8, 20.8, 20.8, 20.8, 20.8, 20.8, 20.8, 20.8, 18.5, 18.5 },  //Niedziela
+  {18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.8, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.8, 20.8, 20.8, 20.8, 20.8, 20.8, 20.8, 18.5, 18.5 },  //Poniedziałek
+  {18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.8, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.8, 20.8, 20.8, 20.8, 20.8, 20.8, 20.8, 18.5, 18.5 },  //Wtorek
+  {18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.8, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.8, 20.8, 20.8, 20.8, 20.8, 20.8, 20.8, 18.5, 18.5 },  //Środa
+  {18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.8, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.8, 20.8, 20.8, 20.8, 20.8, 20.8, 20.8, 18.5, 18.5 },  //Czwartek
+  {18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.8, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.8, 20.8, 20.8, 20.8, 20.8, 20.8, 20.8, 18.5, 18.5 },  //Piątek
   {18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5 }   //Sobota
 }; //Ustawienia temperatury dla poszczególnych dni/godzin, temperatura musi być pomiędzy 14 a 26 stopni Celsjusza z dokładnością do 1 miejsca po przecinku
 
@@ -72,9 +73,9 @@ int		godz			= 1;		//the hour now (0-23)
 float		temp(NAN), hum(NAN), pres(NAN), dewPoint(NAN), absHum(NAN), heatIndex(NAN);	//Zmienne dla danych z czujnika BME280
 
 //STAŁE
-const char	ssid[]			= "XXXX";
-const char	pass[]			= "XXXX";
-const char	auth[]			= "XXXX";	//Token Pokój Rymanowska
+const char	ssid[]			= "ECN";
+const char	pass[]			= "Pecherek1987";
+const char	auth[]			= "f0871fc6d0104ea3b9a374d246992932";	//Token Pokój Rymanowska
 const int	HeatCO			= D6;		//Pin do włączania CO w sterowniku w łazience
 const int	MinTemp			= 14;		//Najniższa możliwa temperatura do ustawienia
 const int	MaxTemp			= 26;		//Najwyższa możliwa temperatura do ustawienia
@@ -87,7 +88,7 @@ const float	HumidHist		= 5;		//histereza dla wilgotności
 BLYNK_CONNECTED()
 {
 	Serial.println("Reconnected, syncing with cloud.");
-	bridge1.setAuthToken("XXXX"); // Token of the hardware B (Łazienka)
+	bridge1.setAuthToken("c1614814b4b64afb8ab15c23620ed60d"); // Token of the hardware B (Łazienka)
 	rtc.begin();
 	Blynk.syncAll();
 }
@@ -271,7 +272,7 @@ void Read_BME280_Values()
 	BME280::PresUnit presUnit(BME280::PresUnit_hPa);
 
 	bme.read(pres, temp, hum, tempUnit, presUnit);
-	temp = temp -4.5;							//Korekta dla temperatury. BME280 się trochę grzeje 
+	temp = temp -4.2;						//Korekta dla temperatury. BME280 się trochę grzeje 
 	pres = pres + 24.634;						//Korekta dostosowująca do ciśnienia na poziomie morza
 	hum  = hum + 9.06;						//Korekta poziomu wilgotności odczytanegoe prze BME280.
 
@@ -584,7 +585,7 @@ void MainFunction()
 	RH = ReadSoilMoisture();	//Odczyt z czujnika wilgotności gleby i konwersja do wartości 0 - 100%
 	Room_Temp_Control();		//kontrola temperatury na podstawie odczytów z BME280
 	OLED_Display();			//Wyświetlanie na ekranie OLED 0.96"
-	Wyslij_Dane();			//Wysyła dane do serwera Blynk
+	//Wyslij_Dane();			//Wysyła dane do serwera Blynk
 }
 
 //---------------------------------------------------------------------------------------------------------------------------------------------
@@ -595,13 +596,11 @@ void setup()
 
 	WiFi.mode(WIFI_STA);
 	WiFi.begin(ssid, pass);
-	Blynk.config(auth);
+	//Blynk.config(auth);
 
 	//Inicjalizacja Timerów
-	Timer.setInterval(30000, blynkCheck);		//Co 30s zostanie sprawdzony czy jest sieć Wi-Fi i czy połączono z serwerem Blynk
+	//Timer.setInterval(30000, blynkCheck);		//Co 30s zostanie sprawdzony czy jest sieć Wi-Fi i czy połączono z serwerem Blynk
 	Timer.setInterval(3000, MainFunction);		//Uruchamia wszystko w pętli co 3s
-
-	Wire.begin();
 
 	//Ustawianie pinów
 	pinMode(LED_BUILTIN, OUTPUT);					//Będzie mrugał diodą
@@ -625,16 +624,28 @@ void setup()
 	u8g2.sendBuffer();
 
 	//inicjowanie czujnika BME280
+	Wire.begin();
 	if (!bme.begin())
 	{
 		Serial.println("Could not find a valid BME280 sensor, check wiring!");
 		while (1);
 	}
+	switch(bme.chipModel())
+	{
+	case BME280::ChipModel_BME280:
+		Serial.println("Found BME280 sensor! Success.");
+		break;
+	case BME280::ChipModel_BMP280:
+		Serial.println("Found BMP280 sensor! No Humidity available.");
+		break;
+	default:
+		Serial.println("Found UNKNOWN sensor! Error!");
+	}
 }
 
 void loop()
 {
-	if (Blynk.connected()) Blynk.run();
+	//if (Blynk.connected()) Blynk.run();
 	Timer.run();
 	OTA_Handle();			//Obsługa OTA (Over The Air) wgrywanie nowego kodu przez Wi-Fi
 }

@@ -10,12 +10,12 @@ SimpleTimer Timer;				//Timer do sprawdzania połaczenia z BLYNKiem (co 30s) i u
 
 // You should get Auth Token in the Blynk App.
 // Go to the Project Settings (nut icon).
-char auth[] = "XXXX";
+char auth[] = "7ee4a4fee7f74a7596a37458bdef6168";
 
 // Your WiFi credentials.
 // Set password to "" for open networks.
-char ssid[] = "XXXX";
-char pass[] = "XXXX";
+char ssid[] = "ECN";
+char pass[] = "Pecherek1987";
 
 
 //Definicja pinów

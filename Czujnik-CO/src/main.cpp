@@ -17,6 +17,16 @@ Objawy zatrucia
 
 #include <Arduino.h>
 
+//AutoConnect https://hieromon.github.io/AutoConnect/
+#include <ESP8266WiFi.h>
+#include <ESP8266WebServer.h>
+#include <AutoConnect.h>
+
+//WiFiWebServer Server;
+ESP8266WebServer	Server;		// Replace with WebServer for ESP32
+AutoConnect		Portal(Server);
+AutoConnectConfig	Config;
+
 //Mutichannel_Gas_Sensor definition 
 #include "MutichannelGasSensor.h"
 
@@ -45,6 +55,7 @@ bool OTAConfigured = 0;
 #include <U8g2lib.h>			//https://github.com/olikraus/U8g2_Arduino
 U8G2_SH1106_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
 
+boolean		RestartESP = false;	//Gdy true i w terminalu YES wykona restart
 int		OLED_ON = 1;		//Deklaracja zmiennej załączenia wyświetlacza OLED gdy sygnał z aplikacji Blynk
 int 		AlarmActive = 0;	//Deklaracja zmiennej odpowiedzialnej za uzbrojenie alarmu
 int		Alarm_Gazowy = 0;	//Deklaracja zmiennej załączenia wyświetlacza OLED gdy przekroczone wartości stężenia gazów
@@ -80,15 +91,18 @@ c = gas.measure_C2H5OH();	// Ethanol C2H5OH 10 – 500ppm
 
 //#define BLYNK_DEBUG // Optional, this enables lots of prints
 //#define BLYNK_PRINT Serial
-#include <ESP8266WiFi.h>
+//#include <ESP8266WiFi.h>
 #include <BlynkSimpleEsp8266.h>		//https://github.com/blynkkk/blynk-library
 #include <SimpleTimer.h>		//https://github.com/jfturcot/SimpleTimer
 SimpleTimer Timer;
 WidgetTerminal terminal(V40);		//Attach virtual serial terminal to Virtual Pin V40
 
-const char	ssid[]	= "XXXX";
-const char	pass[]	= "XXXX";
-const char	auth[]	= "XXXX";	//Token Łazienka Przychojec
+int timerIDReset=-1;					//Przetrzymuje ID Timera https://desire.giesecke.tk/index.php/2018/01/30/change-global-variables-from-isr/
+
+
+//const char	ssid[]	= "StInternet";
+//const char	pass[]	= "stecek82";
+const char	auth[]	= "08dfa31d8fc3478e97accf2fabc4fdf6";	//Token Łazienka Przychojec
 
 //---------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -224,7 +238,7 @@ void Read_BME280_Values()
 	BME280::PresUnit presUnit(BME280::PresUnit_hPa);
 
 	bme.read(pres, temp, hum, tempUnit, presUnit);
-	temp = temp -1.33;		//Korekta dla temperatury. BME280 się trochę grzeje 
+	temp = temp -5.97;		//Korekta dla temperatury. BME280 się trochę grzeje 
 	pres = pres + 24.634;		//Korekta dostosowująca do ciśnienia na poziomie morza
 	hum = hum;			//Korekta poziomu wilgotności odczytanegoe prze BME280.
 	
@@ -526,6 +540,39 @@ int WiFi_Strength (long Signal)
 	return constrain(round((-0.0154*Signal*Signal)-(0.3794*Signal)+98.182), 0, 100);
 }
 
+//signal strength levels https://www.netspotapp.com/what-is-rssi-level.html
+String WiFi_levels(long Signal)
+{
+	String WiFiStrength = "WiFi Strenght ?";
+
+	if (Signal >= -50)
+	{
+		WiFiStrength = "Excellent";
+	}
+	else if (Signal < -50 && Signal >= -60)
+	{
+		WiFiStrength = "Very good";
+	}
+	else if (Signal < -60 && Signal >= -70)
+	{
+		WiFiStrength = "Good";
+	}
+	else if (Signal < -70 && Signal >= -80)
+	{
+		WiFiStrength = "Low";
+	}
+	else if (Signal < -80 && Signal >= -90)
+	{
+		WiFiStrength = "Very low";
+	}
+	else if (Signal < -90 )
+	{
+		WiFiStrength = "Unusable";
+	}
+	
+	return WiFiStrength;
+}
+
 //Wysyła dane na serwer Blynk
 void Wyslij_Dane()
 {
@@ -542,6 +589,25 @@ void Wyslij_Dane()
 	//Blynk.virtualWrite(V9, BathFan);		//Stan włączenia wentylatora Wł/Wył
 	//Blynk.virtualWrite(V10, Piec_CO);		//Stan włączenia pieca CO Wł/Wył
 	Blynk.virtualWrite(V25, WiFi_Strength(WiFi.RSSI())); //Siła sygnału Wi-Fi [%]
+}
+
+//Wyłącza możliwość restartu ESP (timer ustawiony na 30s)
+void RestartCounter()
+{	
+	terminal.clear();
+	terminal.println("30s past. Try again.");
+	terminal.flush();
+	RestartESP = false;	//Gdy true i w terminalu YES wykona restart
+}
+
+//Soft restart sterownika
+void RestartESP32()
+{
+	terminal.clear();
+	terminal.println("Restarting!");
+	terminal.flush();
+	//delay(1000);
+	ESP.restart(); 	//Restartuje sterownik
 }
 
 //Obsługa terminala
@@ -598,9 +664,14 @@ BLYNK_WRITE(V40)
 		terminal.print("V20    OLED_ON       =   ");
 		terminal.print(OLED_ON);
 		terminal.println(" ");
-		terminal.print("V25    WiFi Signal   =   ");
+		terminal.print("V25    WiFi Signal    =  ");
 		terminal.print(WiFi_Strength(WiFi.RSSI()));
-		terminal.println(" %");
+		terminal.print("%, ");
+		terminal.print(WiFi.RSSI());
+		terminal.print("dBm, ");
+		terminal.println(WiFi_levels(WiFi.RSSI()));
+		terminal.print("AutoConnect IP        = ");
+		terminal.print(WiFi.localIP().toString() + "/_ac");
 	}
 	else if (String("alarms") == TerminalCommand)
 	{
@@ -649,6 +720,25 @@ BLYNK_WRITE(V40)
 		terminal.print(Ethanol);
 		terminal.println(" ppm");		
 	}
+	else if (String("restart") == TerminalCommand)
+	{
+		terminal.clear();
+		terminal.println("Are you sure you want to restart?");
+		terminal.println("Type YES if you are sure to restart...");
+		terminal.flush();
+		RestartESP = true;	//Gdy true i w terminalu YES wykona restart
+		Timer.setTimeout(30000, RestartCounter);
+	}
+	else if (String("yes") == TerminalCommand)
+	{	
+		if (RestartESP)
+		{
+			terminal.clear();
+			terminal.println("To be restarted in 3...2...1...");
+			terminal.flush();
+			Timer.setTimeout(2000, RestartESP32);	//Zrestartuje sterownik za 1s
+		}
+	}
 	else if (String("hello") == TerminalCommand)
 	{
 		terminal.clear();
@@ -665,6 +755,7 @@ BLYNK_WRITE(V40)
 		terminal.println("Type 'VALUES' to show sensor data");
 		terminal.println("Type 'ALARMS' to show alarms data");
 		terminal.println("Type 'GAS' to show gas measurements");
+		terminal.println("Type 'RESTART' to restart.");
 		terminal.println("Type 'CLS' to clear terminal");
 		terminal.println("or 'HELLO' to say hello!");
 	}
@@ -813,8 +904,25 @@ void MainFunction()
 void setup()
 {
 	Serial.begin(115200);
-	WiFi.begin(ssid, pass);
-	Serial.println("Connecting to BLYNK");
+	
+	//WiFi.begin(ssid, pass);
+	//Serial.println("Connecting to BLYNK");
+	//Blynk.config(auth);
+
+	// Autoconnect
+	Config.hostName = "CO_Sensor";		// Sets host name to SotAp identification
+	Config.homeUri = "/_ac";		// Sets home path of Sketch application
+	Config.retainPortal = true;		// Launch the captive portal on-demand at losing WiFi
+	Config.autoReconnect = true;		// Enable auto-reconnect
+	Config.ota = AC_OTA_BUILTIN;
+	Portal.config(Config);    		// Don't forget it.
+	if (Portal.begin())
+	{	
+		Serial.println("WiFi connected: " + WiFi.localIP().toString());
+		//Server.on("/", handleRoot);
+	}
+
+	//WiFi.begin(ssid, pass);
 	Blynk.config(auth);
 
 	Timer.setInterval(30000, blynkCheck);		//Sprawdza czy BLYNK połączony co 30s
@@ -839,9 +947,8 @@ void setup()
 	u8g2.print(F("GAZU")); 
 	u8g2.setFont(u8g_font_helvR08); 
 	u8g2.setCursor(0, 64);
-	u8g2.print("Connecting to: "+String(ssid));
+	u8g2.print("Connecting...");	// to: "+String(ssid));
 	u8g2.sendBuffer();
-
 
 	// Inicjalizacja Grove - Multichannel Gas Sensor
 	gas.begin(0x04);			//the default I2C address of the slave is 0x04
@@ -855,11 +962,34 @@ void setup()
 		Serial.println("Could not find a valid BME280 sensor, check wiring!");
 		while (1);
 	}
+	
+	blynkCheck(); 					//Piewsze połaczenie z Blynk, nie trzeba czekać 30s po restarcie
 }
 
 void loop()
 {
-	if (Blynk.connected()) Blynk.run();
+	//if (Blynk.connected()) Blynk.run();
+	//Timer.run();
+	//OTA_Handle();			//Obsługa OTA (Over The Air) wgrywanie nowego kodu przez Wi-Fi
+
 	Timer.run();
-	OTA_Handle();			//Obsługa OTA (Over The Air) wgrywanie nowego kodu przez Wi-Fi
+	if (WiFi.status() == WL_CONNECTED)
+	{
+		// Here to do when WiFi is connected.
+		if (Blynk.connected()) Blynk.run();
+		OTA_Handle();			//Obsługa OTA (Over The Air) wgrywanie nowego kodu przez Wi-Fi
+		if(Timer.isEnabled(timerIDReset))
+		{
+			Timer.deleteTimer(timerIDReset);
+		}
+	}
+	else	//Zrestartuje sterownik jeśli brak sieci przez 5min
+	{
+		if (Timer.isEnabled(timerIDReset) == false)
+		{
+			timerIDReset = Timer.setTimeout(300000, RestartESP32);
+		}
+	}
+	
+	Portal.handleClient();
 }

@@ -1,5 +1,15 @@
 #include <Arduino.h>
-#include <SPI.h>
+
+//AutoConnect https://hieromon.github.io/AutoConnect/
+#include <ESP8266WiFi.h>
+#include <ESP8266WebServer.h>
+#include <AutoConnect.h>
+
+//WiFiWebServer Server;
+ESP8266WebServer	Server;		// Replace with WebServer for ESP32
+AutoConnect		Portal(Server);
+AutoConnectConfig	Config;
+
 /*Connecting the BME280 Sensor:
 Sensor              ->  Board
 -----------------------------
@@ -9,18 +19,20 @@ SDA (Serial Data)   ->  D2 on NodeMCU / Wemos D1 PRO
 SCK (Serial Clock)  ->  D1 on NodeMCU / Wemos D1 PRO */
 
 //BME280 definition
-#include <EnvironmentCalculations.h>
+#include <EnvironmentCalculations.h>			//https://github.com/finitespace/BME280/blob/master/src/EnvironmentCalculations.h
 #include <BME280I2C.h>
+#include <SPI.h>
+#include <Wire.h>
 BME280I2C::Settings settings(
-   BME280::OSR_X1,
-   BME280::OSR_X1,
-   BME280::OSR_X1,
-   BME280::Mode_Forced,
-   BME280::StandbyTime_125ms,
-   BME280::Filter_Off,
-   BME280::SpiEnable_False
-   //BME280I2C::I2CAddr_0x76 // I2C address. I2C specific.
-);
+	BME280::OSR_X1,
+	BME280::OSR_X1,
+	BME280::OSR_X1,
+	BME280::Mode_Forced,
+	BME280::StandbyTime_125ms,
+	BME280::Filter_Off,
+	BME280::SpiEnable_False,
+	BME280I2C::I2CAddr_0x76 // I2C address. I2C specific.
+	);
 BME280I2C bme(settings);
 
 //for OTA
@@ -35,9 +47,14 @@ bool OTAConfigured = 0;
 #include <BlynkSimpleEsp8266.h>
 WidgetTerminal terminal(V40);				//Attach virtual serial terminal to Virtual Pin V40
 #include <SimpleTimer.h>				//https://github.com/jfturcot/SimpleTimer
+#include <TimeLib.h>
+#include <WidgetRTC.h>
 SimpleTimer Timer;
+WidgetRTC rtc;						//Inicjacja widgetu zegara czasu rzeczywistego RTC
 
-static volatile int timerID;				//Przetrzymuje ID Timera https://desire.giesecke.tk/index.php/2018/01/30/change-global-variables-from-isr/
+static volatile int timerID=-1;				//Przetrzymuje ID Timera https://desire.giesecke.tk/index.php/2018/01/30/change-global-variables-from-isr/
+int timerIDReset=-1;					//Przetrzymuje ID Timera https://desire.giesecke.tk/index.php/2018/01/30/change-global-variables-from-isr/
+
 int		Tryb_Sterownika		= 0;		//Tryb_Sterownika 0 = AUTO, 1 = ON, 2 = OFF, 3 = MANUAL
 float		SetHumidManual		= 75;		//Wilgotności przy której załączy się wentylator w trybie manualnym
 float		SetHumidActual		= 50;		//Wilgotności przy której załączy się wentylator
@@ -46,12 +63,13 @@ int		PhotoResValue		= 0;		//Store value from photoresistor (0-1023)
 int		ProgPhotoresistor	= 300;		//Próg jasności od którego zacznie działać iluminacja sedesu (nie powinno podświetlać jeśli światło w łazience zapalone)
 static volatile boolean	isLED_Light	= false;	//TRUE jeśli diody świecą FALSE jeśli nie świecą
 boolean		HeatCO			= false;	//informacja wysyłana na V18 TRUE jeśli piec grzeje i FALSE jeśli nie grzeje (funkcja Bridge)
+boolean		RestartESP		= false;	//Gdy true i w terminalu YES wykona restart
 float temp(NAN), hum(NAN), pres(NAN), dewPoint(NAN), absHum(NAN), heatIndex(NAN);
 
 //STAŁE
-const char	ssid[]			= "XXXX";
-const char	pass[]			= "XXXX";
-const char	auth[]			= "XXXX";	//Token Łazienka Rymanowska
+//const char	ssid[]			= "ECN";
+//const char	pass[]			= "Pecherek1987";
+const char	auth[]			= "c1614814b4b64afb8ab15c23620ed60d";	//Token Łazienka Rymanowska
 const int	BathFan			= D5;		//Deklaracja pinu na który zostanie wysłany sygnał załączenia wentylatora
 const int	Piec_CO			= D6;		//Deklaracja pinu na którym będzie włączany piec CO
 const int	PIR_Sensor		= D7;		//Deklaracja pinu z sensorem ruchu AM312
@@ -65,6 +83,7 @@ const float	HumidHist		= 4;		//Wartość histerezy dla wilgotności
 BLYNK_CONNECTED()
 {
 	Serial.println("Reconnected, syncing with cloud.");
+	rtc.begin();
 	Blynk.syncAll();
 }
 
@@ -232,6 +251,39 @@ int WiFi_Strength (long Signal)
 	return constrain(round((-0.0154*Signal*Signal)-(0.3794*Signal)+98.182), 0, 100);
 }
 
+//signal strength levels https://www.netspotapp.com/what-is-rssi-level.html
+String WiFi_levels(long Signal)
+{
+	String WiFiStrength = "WiFi Strenght ?";
+
+	if (Signal >= -50)
+	{
+		WiFiStrength = "Excellent";
+	}
+	else if (Signal < -50 && Signal >= -60)
+	{
+		WiFiStrength = "Very good";
+	}
+	else if (Signal < -60 && Signal >= -70)
+	{
+		WiFiStrength = "Good";
+	}
+	else if (Signal < -70 && Signal >= -80)
+	{
+		WiFiStrength = "Low";
+	}
+	else if (Signal < -80 && Signal >= -90)
+	{
+		WiFiStrength = "Very low";
+	}
+	else if (Signal < -90 )
+	{
+		WiFiStrength = "Unusable";
+	}
+	
+	return WiFiStrength;
+}
+
 //Wysyła dane na serwer Blynk
 void Wyslij_Dane()
 {
@@ -279,6 +331,25 @@ void TrybManAuto()
 	}
 }
 
+//Wyłącza możliwość restartu ESP (timer ustawiony na 30s)
+void RestartCounter()
+{	
+	terminal.clear();
+	terminal.println("30s past. Try again.");
+	terminal.flush();
+	RestartESP = false;	//Gdy true i w terminalu YES wykona restart
+}
+
+//Soft restart sterownika
+void RestartESP32()
+{
+	terminal.clear();
+	terminal.println("Restarting!");
+	terminal.flush();
+	//delay(1000);
+	ESP.restart(); 	//Restartuje sterownik
+}
+
 //Obsługa terminala
 BLYNK_WRITE(V40)
 {
@@ -293,7 +364,8 @@ BLYNK_WRITE(V40)
 		terminal.println("V1   ->  Humidity           %");
 		terminal.println("V2   ->  Pressure           HPa");
 		terminal.println("V3   ->  DewPoint           °C");
-		terminal.println("V4   ->  Abs Humidity       g/m3");
+		terminal.print("V4   ->  Abs Humidity       g/m");
+		terminal.println("\xc2\xb3");	//^3 potęga 3 https://www.utf8-chartable.de/unicode-utf8-table.pl?start=128&number=128&utf8=string-literal&unicodeinhtml=hex
 		terminal.println("V5   ->  Heat Index         °C");
 		terminal.println("V10  <-  SetHumidManual     %");
 		terminal.println("V11  <-  Fan Manual & State 1,2,3,4");
@@ -306,36 +378,61 @@ BLYNK_WRITE(V40)
 	else if (String("values") == TerminalCommand)
 	{
 		terminal.clear();
-		terminal.println("PORT   DATA              VALUE");
-		terminal.print("V0     Temperature    =   ");
-		terminal.print(temp);
+	      terminal.println("PORT   DATA             VALUE");
+		terminal.print("V0     Temperature    = ");
+		terminal.print(temp,2);
 		terminal.println(" °C");
-		terminal.print("V1     Humidity       =   ");
+		terminal.print("V1     Humidity       = ");
 		terminal.print(hum);
-		terminal.println(" %");
-		terminal.print("V2     Pressure       =   ");
+		terminal.println("%");
+		terminal.print("V2     Pressure       = ");
 		terminal.print(pres);
-		terminal.println(" HPa");
-		terminal.print("V3     DewPoint       =   ");
+		terminal.println("HPa");
+		terminal.print("V3     DewPoint       = ");
 		terminal.print(dewPoint);
-		terminal.println(" °C");
-		terminal.print("V4     Abs Humidity   =   ");
+		terminal.println("°C");
+		terminal.print("V4     Abs Humidity   = ");
 		terminal.print(absHum);
-		terminal.println(" g/m3");
-		terminal.print("V5     Heat Index     =   ");
+		terminal.print("g/m");
+		terminal.println("\xc2\xb3");	//^3 potęga 3 https://www.utf8-chartable.de/unicode-utf8-table.pl?start=128&number=128&utf8=string-literal&unicodeinhtml=hex
+		terminal.print("V5     Heat Index     = ");
 		terminal.print(heatIndex);
-		terminal.println(" °C");
-		terminal.print("V10    SetHumidManual =   ");
+		terminal.println("°C");
+		terminal.print("V10    SetHumidManual = ");
 		terminal.println(SetHumidManual);
-		terminal.print("V18    HeatCO         =   ");
+		terminal.print("V18    HeatCO         = ");
 		terminal.println(HeatCO);
-		terminal.print("V55    PhotoResistor  =   ");
+		terminal.print("V55    PhotoResistor  = ");
 		terminal.println(analogRead(PhotoResistor));
-		terminal.print("V56    PIR_Sensor     =   ");
+		terminal.print("V56    PIR_Sensor     = ");
 		terminal.println(digitalRead(PIR_Sensor));
-		terminal.print("V25    WiFi Signal    =   ");
+		terminal.print("V25    WiFi Signal    = ");
 		terminal.print(WiFi_Strength(WiFi.RSSI()));
-		terminal.println(" %");
+		terminal.print("%, ");
+		terminal.print(WiFi.RSSI());
+		terminal.print("dBm, ");
+		terminal.println(WiFi_levels(WiFi.RSSI()));
+		terminal.print("AutoConnect IP        = ");
+		terminal.print(WiFi.localIP().toString() + "/_ac");
+	}
+	else if (String("restart") == TerminalCommand)
+	{
+		terminal.clear();
+		terminal.println("Are you sure you want to restart?");
+		terminal.println("Type YES if you are sure to restart...");
+		terminal.flush();
+		RestartESP = true;	//Gdy true i w terminalu YES wykona restart
+		Timer.setTimeout(30000, RestartCounter);
+	}
+	else if (String("yes") == TerminalCommand)
+	{	
+		if (RestartESP)
+		{
+			terminal.clear();
+			terminal.println("To be restarted in 3...2...1...");
+			terminal.flush();
+			Timer.setTimeout(2000, RestartESP32);	//Zrestartuje sterownik za 1s
+		}
 	}
 	else if (String("hello") == TerminalCommand)
 	{
@@ -351,6 +448,7 @@ BLYNK_WRITE(V40)
 		terminal.clear();
 		terminal.println("Type 'PORTS' to show list");
 		terminal.println("Type 'VALUES' to show sensor data");
+		terminal.println("Type 'RESTART' to restart.");
 		terminal.println("Type 'CLS' to clear terminal");
 		terminal.println("or 'HELLO' to say hello!");
 	}
@@ -361,7 +459,8 @@ BLYNK_WRITE(V40)
 //Ustawienie progu wilgotności powyżej którego włączy się wentylator (plus próg)
 BLYNK_WRITE(V10)
 {
-	SetHumidManual = param.asInt(); 
+	SetHumidManual = param.asInt();
+	Bathrum_Humidity_Control();	//Uruchomienie funkcji Bathrum_Humidity_Control() aby zadziałało natychmiast
 }
 
 //Informacja czy piec grzeje
@@ -397,6 +496,7 @@ BLYNK_WRITE(V11)
 			Tryb_Sterownika = 0;
 			break;
 	}
+	Bathrum_Humidity_Control();	//Uruchomienie funkcji Bathrum_Humidity_Control() aby zadziałało natychmiast
 }
 
 //Wyłączenie podświetlania sedesu
@@ -415,7 +515,7 @@ ICACHE_RAM_ATTR void handleInterrupt()
 	}
 	else if (analogRead(PhotoResistor) < ProgPhotoresistor )	//Returns true if the specified timer is enabled
 	{
-		timerID = Timer.setTimeout(45000, SedesIlluminationOFF);//Wyłączy iluminacje sedesu za 5s
+		timerID = Timer.setTimeout(45000, SedesIlluminationOFF);//Wyłączy iluminacje sedesu za 45s
 		digitalWrite(LED_Light, HIGH);
 		isLED_Light = true;
 	}
@@ -440,7 +540,20 @@ void MainFunction()
 void setup()
 {
 	Serial.begin(115200);
-	WiFi.begin(ssid, pass);
+	// Autoconnect
+	Config.hostName = "Lazienka";		// Sets host name to SotAp identification
+	Config.homeUri = "/_ac";		// Sets home path of Sketch application
+	Config.retainPortal = true;		// Launch the captive portal on-demand at losing WiFi
+	Config.autoReconnect = true;		// Enable auto-reconnect
+	Config.ota = AC_OTA_BUILTIN;
+	Portal.config(Config);    		// Don't forget it.
+	if (Portal.begin())
+	{	
+		Serial.println("WiFi connected: " + WiFi.localIP().toString());
+		//Server.on("/", handleRoot);
+	}
+
+	//WiFi.begin(ssid, pass);
 	Blynk.config(auth);
 
 	//Inicjalizacja Timerów
@@ -462,23 +575,53 @@ void setup()
 	attachInterrupt(digitalPinToInterrupt(PIR_Sensor), handleInterrupt, HIGH);	//Obsługa przerwań dla czujnika ruchu
 
 	//inicjowanie czujnika BME280
+	Wire.begin();
 	if (!bme.begin())
 	{
 		Serial.println("Could not find a valid BME280 sensor, check wiring!");
 		while (1);
-		
 	}
+	switch(bme.chipModel())
+	{
+	case BME280::ChipModel_BME280:
+		Serial.println("Found BME280 sensor! Success.");
+		break;
+	case BME280::ChipModel_BMP280:
+		Serial.println("Found BMP280 sensor! No Humidity available.");
+		break;
+	default:
+		Serial.println("Found UNKNOWN sensor! Error!");
+	}
+
+	blynkCheck(); 					//Piewsze połaczenie z Blynk, nie trzeba czekać 30s po restarcie
 }
 
 void loop()
-{
-	if (Blynk.connected()) Blynk.run();
+{	
 	Timer.run();
-	OTA_Handle();				//Obsługa OTA (Over The Air) wgrywanie nowego kodu przez Wi-Fi
+	if (WiFi.status() == WL_CONNECTED)
+	{
+		// Here to do when WiFi is connected.
+		if (Blynk.connected()) Blynk.run();
+		OTA_Handle();			//Obsługa OTA (Over The Air) wgrywanie nowego kodu przez Wi-Fi
+		if(Timer.isEnabled(timerIDReset))
+		{
+			Timer.deleteTimer(timerIDReset);
+		}
+	}
+	else	//Zrestartuje sterownik jeśli brak sieci przez 5min
+	{
+		if (Timer.isEnabled(timerIDReset) == false)
+		{
+			timerIDReset = Timer.setTimeout(300000, RestartESP32);
+		}
+	}
+	
+	Portal.handleClient();
 
 	if ( isLED_Light && analogRead(PhotoResistor) > ProgPhotoresistor )
 	{
-		Timer.deleteTimer(timerID);	//Wyłącza Timer 
+		Timer.deleteTimer(timerID);	//Wyłącza Timer
 		SedesIlluminationOFF();		//Wyłączenie podświetlania sedesu
 	}
 }
