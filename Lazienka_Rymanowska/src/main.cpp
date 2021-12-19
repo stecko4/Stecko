@@ -1,22 +1,14 @@
 #include <Arduino.h>
 
 //AutoConnect https://hieromon.github.io/AutoConnect/
-#include <ESP8266WiFi.h>
-#include <ESP8266WebServer.h>
+#include <ESP8266WiFi.h>		// Replace 'ESP8266WiFi.h' with 'WiFi.h. for ESP32
+#include <ESP8266WebServer.h>	// Replace 'ESP8266WebServer.h'with 'WebServer.h' for ESP32
 #include <AutoConnect.h>
 
 //WiFiWebServer Server;
-ESP8266WebServer	Server;		// Replace with WebServer for ESP32
-AutoConnect		Portal(Server);
+ESP8266WebServer	Server;		// Replace 'ESP8266WebServer' with 'WebServer' for ESP32
+AutoConnect			Portal(Server);
 AutoConnectConfig	Config;
-
-/*Connecting the BME280 Sensor:
-Sensor              ->  Board
------------------------------
-Vin (Voltage In)    ->  3.3V
-Gnd (Ground)        ->  Gnd
-SDA (Serial Data)   ->  D2 on NodeMCU / Wemos D1 PRO
-SCK (Serial Clock)  ->  D1 on NodeMCU / Wemos D1 PRO */
 
 //BME280 definition
 #include <EnvironmentCalculations.h>			//https://github.com/finitespace/BME280/blob/master/src/EnvironmentCalculations.h
@@ -36,46 +28,48 @@ BME280I2C::Settings settings(
 BME280I2C bme(settings);
 
 //for OTA
-#include <ESP8266mDNS.h>
-#include <WiFiUdp.h>
-#include <ArduinoOTA.h>
-bool OTAConfigured = 0;
+//#include <ESP8266mDNS.h>
+//#include <WiFiUdp.h>
+//#include <ArduinoOTA.h>
+//bool OTAConfigured = 0;
 
-//#define BLYNK_DEBUG					//Optional, this enables lots of prints
+//#define BLYNK_DEBUG					// Optional, this enables lots of prints
 //#define BLYNK_PRINT Serial
 #include <ESP8266WiFi.h>
-#include <BlynkSimpleEsp8266.h>
-WidgetTerminal terminal(V40);				//Attach virtual serial terminal to Virtual Pin V40
-#include <SimpleTimer.h>				//https://github.com/jfturcot/SimpleTimer
+#include <BlynkSimpleEsp8266.h>			// Replace 'BlynkSimpleEsp8266' with 'BlynkSimpleEsp32.h. for ESP32
+WidgetTerminal terminal(V40);			// Attach virtual serial terminal to Virtual Pin V40
+#include <SimpleTimer.h>				// https://github.com/jfturcot/SimpleTimer
 #include <TimeLib.h>
 #include <WidgetRTC.h>
 SimpleTimer Timer;
-WidgetRTC rtc;						//Inicjacja widgetu zegara czasu rzeczywistego RTC
+WidgetRTC rtc;							//Inicjacja widgetu zegara czasu rzeczywistego RTC
 
-static volatile int timerID=-1;				//Przetrzymuje ID Timera https://desire.giesecke.tk/index.php/2018/01/30/change-global-variables-from-isr/
+static volatile int timerID=-1;			//Przetrzymuje ID Timera https://desire.giesecke.tk/index.php/2018/01/30/change-global-variables-from-isr/
 int timerIDReset=-1;					//Przetrzymuje ID Timera https://desire.giesecke.tk/index.php/2018/01/30/change-global-variables-from-isr/
 
-int		Tryb_Sterownika		= 0;		//Tryb_Sterownika 0 = AUTO, 1 = ON, 2 = OFF, 3 = MANUAL
-float		SetHumidManual		= 75;		//Wilgotności przy której załączy się wentylator w trybie manualnym
-float		SetHumidActual		= 50;		//Wilgotności przy której załączy się wentylator
-float		RoomHumid		= 0;		//Wilgotności w pokoju, potrzebna do wyznaczenia wartości wilgotności przy której ma się załączyć wentylator
-int		PhotoResValue		= 0;		//Store value from photoresistor (0-1023)
-int		ProgPhotoresistor	= 300;		//Próg jasności od którego zacznie działać iluminacja sedesu (nie powinno podświetlać jeśli światło w łazience zapalone)
-static volatile boolean	isLED_Light	= false;	//TRUE jeśli diody świecą FALSE jeśli nie świecą
-boolean		HeatCO			= false;	//informacja wysyłana na V18 TRUE jeśli piec grzeje i FALSE jeśli nie grzeje (funkcja Bridge)
-boolean		RestartESP		= false;	//Gdy true i w terminalu YES wykona restart
+int		Tryb_Sterownika		= 0;		// Tryb_Sterownika 0 = AUTO, 1 = ON, 2 = OFF, 3 = MANUAL
+float	SetHumidManual		= 75;		// Wilgotności przy której załączy się wentylator w trybie manualnym
+float	SetHumidActual		= 50;		// Wilgotności przy której załączy się wentylator
+float	RoomHumid			= 0;		// Wilgotności w pokoju, potrzebna do wyznaczenia wartości wilgotności przy której ma się załączyć wentylator
+int		PhotoResValue		= 0;		// Store value from photoresistor (0-1023)
+int		ProgPhotoresistor	= 300;		// Próg jasności od którego zacznie działać iluminacja sedesu (nie powinno podświetlać jeśli światło w łazience zapalone)
+static volatile boolean	isLED_Light	= false;	// TRUE jeśli diody świecą FALSE jeśli nie świecą
+boolean		HeatCO			= false;	// informacja wysyłana na V18 TRUE jeśli piec grzeje i FALSE jeśli nie grzeje (funkcja Bridge)
+boolean		RestartESP		= false;	// Gdy true i w terminalu YES wykona restart
 float temp(NAN), hum(NAN), pres(NAN), dewPoint(NAN), absHum(NAN), heatIndex(NAN);
 
 //STAŁE
-//const char	ssid[]			= "ECN";
-//const char	pass[]			= "Pecherek1987";
-const char	auth[]			= "c1614814b4b64afb8ab15c23620ed60d";	//Token Łazienka Rymanowska
-const int	BathFan			= D5;		//Deklaracja pinu na który zostanie wysłany sygnał załączenia wentylatora
-const int	Piec_CO			= D6;		//Deklaracja pinu na którym będzie włączany piec CO
-const int	PIR_Sensor		= D7;		//Deklaracja pinu z sensorem ruchu AM312
-const int	LED_Light		= D8;		//Deklaracja pinu z MOSFETem do iluminacji sedesu
-const int	PhotoResistor		= A0;		//Deklaracja pinu z sensorem światła
-const float	HumidHist		= 4;		//Wartość histerezy dla wilgotności
+//const char	ssid[]		= "Your SSID";							// Not required with AutoConnect
+//const char	pass[]		= "Router password";					// Not required with AutoConnect
+const char	auth[]			= "q3lvQ_5iEAtG06rXBrmUtsPZ_2DhuGQj";	// Token Łazienka Rymanowska
+const char	server[] 		= "192.168.1.204";  					// IP for your Local Server or DNS server addres stecko.duckdns.org
+const int	port 			= 8080;									// Port na którym jest serwer Blykn
+const int	BathFan			= D5;		// Deklaracja pinu na który zostanie wysłany sygnał załączenia wentylatora
+const int	Piec_CO			= D6;		// Deklaracja pinu na którym będzie włączany piec CO
+const int	PIR_Sensor		= D7;		// Deklaracja pinu z sensorem ruchu AM312
+const int	LED_Light		= D8;		// Deklaracja pinu z MOSFETem do iluminacji sedesu
+const int	PhotoResistor	= A0;		// Deklaracja pinu z sensorem światła
+const float	HumidHist		= 4;		// Wartość histerezy dla wilgotności
 
 //---------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -132,7 +126,7 @@ void blynkCheck()
 	}
 }
 
-//Over-The-Air w skrócie OTA umożliwia przesyłanie plików do urządzeń przez sieć WiFi
+/*//Over-The-Air w skrócie OTA umożliwia przesyłanie plików do urządzeń przez sieć WiFi
 void OTA_Handle()
 {
 	if (OTAConfigured == 1)
@@ -193,6 +187,7 @@ void OTA_Handle()
 		}
 	}
 }
+*/
 
 //Załączanie wentylatora w łazience jeśli warunek spełnionyBathFan_Value
 void Bathrum_Humidity_Control()
@@ -287,16 +282,16 @@ String WiFi_levels(long Signal)
 //Wysyła dane na serwer Blynk
 void Wyslij_Dane()
 {
-	Blynk.virtualWrite(V0, temp);				//Temperatura [°C]
-	Blynk.virtualWrite(V1, hum);				//Wilgotność [%]
-	Blynk.virtualWrite(V2, pres);				//Ciśnienie [hPa]
-	Blynk.virtualWrite(V3, dewPoint);			//Temperatura punktu rosy [°C]
-	Blynk.virtualWrite(V4, absHum);				//Wilgotność bezwzględna [g/m³]
-	Blynk.virtualWrite(V5, heatIndex);			//Temperatura odczuwalna [°C]
-	Blynk.virtualWrite(V6, SetHumidActual);			//Wilgotności przy której załączy się wentylator w trybie automatycznym [%] 
-	Blynk.virtualWrite(V25, WiFi_Strength(WiFi.RSSI())); 	//Siła sygnału Wi-Fi [%], constrain() limits range of sensor values to between 0 and 100
-	Blynk.virtualWrite(V55, analogRead(PhotoResistor));	//Czujnik światła
-	Blynk.virtualWrite(V56, digitalRead(PIR_Sensor));	//Czujnik ruchu
+	Blynk.virtualWrite(V0, temp);							// Temperatura [°C]
+	Blynk.virtualWrite(V1, hum);							// Wilgotność [%]
+	Blynk.virtualWrite(V2, pres);							// Ciśnienie [hPa]
+	Blynk.virtualWrite(V3, dewPoint);						// Temperatura punktu rosy [°C]
+	Blynk.virtualWrite(V4, absHum);							// Wilgotność bezwzględna [g/m³]
+	Blynk.virtualWrite(V5, heatIndex);						// Temperatura odczuwalna [°C]
+	Blynk.virtualWrite(V6, SetHumidActual);					// Wilgotności przy której załączy się wentylator w trybie automatycznym [%] 
+	Blynk.virtualWrite(V25, WiFi_Strength(WiFi.RSSI())); 	// Siła sygnału Wi-Fi [%], constrain() limits range of sensor values to between 0 and 100
+	Blynk.virtualWrite(V55, analogRead(PhotoResistor));		// Czujnik światła
+	Blynk.virtualWrite(V56, digitalRead(PIR_Sensor));		// Czujnik ruchu
 }
 
 //Ustawienie trybów sterowania wilgotnością
@@ -381,7 +376,7 @@ BLYNK_WRITE(V40)
 	      terminal.println("PORT   DATA             VALUE");
 		terminal.print("V0     Temperature    = ");
 		terminal.print(temp,2);
-		terminal.println(" °C");
+		terminal.println("°C");
 		terminal.print("V1     Humidity       = ");
 		terminal.print(hum);
 		terminal.println("%");
@@ -482,18 +477,23 @@ BLYNK_WRITE(V11)
 	{
 		case 1:				//AUTO
 			Tryb_Sterownika = 0;
+			Blynk.setProperty(V10,"color","#163C49"); //Zdławiony-niebieski
 			break;
 		case 2:				//ON
 			Tryb_Sterownika = 1;
+			Blynk.setProperty(V10,"color","#163C49"); //Zdławiony-niebieski
 			break;
 		case 3:				//OFF
 			Tryb_Sterownika = 2;
+			Blynk.setProperty(V10,"color","#163C49"); //Jasno-niebieski
 			break;
 		case 4:				//MAN
 			Tryb_Sterownika = 3;
+			Blynk.setProperty(V10,"color","#04B0E2"); //Zdławiony-niebieski
 			break;
 		default:		//Wartość domyślna AUTO
 			Tryb_Sterownika = 0;
+			Blynk.setProperty(V10,"color","#163C49"); //Zdławiony-niebieski
 			break;
 	}
 	Bathrum_Humidity_Control();	//Uruchomienie funkcji Bathrum_Humidity_Control() aby zadziałało natychmiast
@@ -507,7 +507,8 @@ void SedesIlluminationOFF()
 }
 
 //Obsługa przerwań wywoływanych przez czujnik PIR AM312
-ICACHE_RAM_ATTR void handleInterrupt()
+//ICACHE_RAM_ATTR void handleInterrupt()
+IRAM_ATTR void handleInterrupt()
 {
 	if ( isLED_Light && Timer.isEnabled(timerID) && analogRead(PhotoResistor) < ProgPhotoresistor)
 	{
@@ -554,7 +555,11 @@ void setup()
 	}
 
 	//WiFi.begin(ssid, pass);
-	Blynk.config(auth);
+	Blynk.config(auth, server, port);   // for local servernon-blocking, even if no server connection
+	//Blynk.config(auth);				//For cloud
+
+
+
 
 	//Inicjalizacja Timerów
 	Timer.setInterval(30000, blynkCheck);		//Sprawdza czy BLYNK połączony co 30s
@@ -603,13 +608,13 @@ void loop()
 	{
 		// Here to do when WiFi is connected.
 		if (Blynk.connected()) Blynk.run();
-		OTA_Handle();			//Obsługa OTA (Over The Air) wgrywanie nowego kodu przez Wi-Fi
+		//OTA_Handle();			//Obsługa OTA (Over The Air) wgrywanie nowego kodu przez Wi-Fi
 		if(Timer.isEnabled(timerIDReset))
 		{
 			Timer.deleteTimer(timerIDReset);
 		}
 	}
-	else	//Zrestartuje sterownik jeśli brak sieci przez 5min
+	 else	//Zrestartuje sterownik jeśli brak sieci przez 5min
 	{
 		if (Timer.isEnabled(timerIDReset) == false)
 		{

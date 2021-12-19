@@ -1,94 +1,129 @@
 #include <Arduino.h>
-/*Connecting the BME280 Sensor:
-Sensor              ->  Board
------------------------------
-Vin (Voltage In)    ->  3.3V
-Gnd (Ground)        ->  Gnd
-SDA (Serial Data)   ->  D2 on NodeMCU / Wemos D1 PRO
-SCK (Serial Clock)  ->  D1 on NodeMCU / Wemos D1 PRO */
+
+//Biblioteki potrzebne dla AutoConnect
+#include <WiFi.h>				// Replace 'ESP8266WiFi.h' with 'WiFi.h. for ESP32
+#include <WebServer.h>			// Replace 'ESP8266WebServer.h'with 'WebServer.h' for ESP32
+#include <AutoConnect.h>
+WebServer			Server;		// Replace 'ESP8266WebServer' with 'WebServer' for ESP32
+AutoConnect			Portal(Server);
+AutoConnectConfig	Config;       // Enable autoReconnect supported on v0.9.4
+//const String hostname = "PokojRymanowska";
+
+
+//Biblioteka do obsługi wyświetlacza, bardzo szybka
+#include <SPI.h>
+#include <TFT_eSPI.h>
+//#include "Free_Fonts.h" 			// Include the header file attached to this sketch
+TFT_eSPI tft = TFT_eSPI();
 
 //BME280 definition
-#include <EnvironmentCalculations.h>			//https://github.com/finitespace/BME280/blob/master/src/EnvironmentCalculations.h
-#include <BME280I2C.h>
+#include <EnvironmentCalculations.h>
 #include <Wire.h>
-BME280I2C::Settings settings(
-	BME280::OSR_X1,
-	BME280::OSR_X1,
-	BME280::OSR_X1,
-	BME280::Mode_Forced,
-	BME280::StandbyTime_125ms,
-	BME280::Filter_Off,
-	BME280::SpiEnable_False,
-	BME280I2C::I2CAddr_0x76 // I2C address. I2C specific.
-	);
-BME280I2C bme(settings);
 
-//Wyświetlacz OLED
-#include <U8g2lib.h>
-U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
+// Include the libraries we need
+#include <OneWire.h>
+//#include <DallasTemperature.h>
+//OneWire oneWire(13); 				// Setup a oneWire instance to communicate with a OneWire device connected to GPIO13
+//DallasTemperature DS18B20(&oneWire);	// Pass our oneWire reference to Dallas Temperature sensor 
+//DeviceAddress DS18B20_Address = { 0x28, 0xFF, 0x64, 0x18, 0xD0, 0x6F, 0x9D, 0xD5 }; //adres: 28 FF 64 18 D0 6F 9D D5
+#include <DS18B20.h>
+#define ONE_WIRE_BUS 13				// Setup a oneWire instance to communicate with a OneWire device connected to GPIO13
+OneWire oneWire(ONE_WIRE_BUS);
+DS18B20 sensor(&oneWire);
+
+//SHT31
+#include "Adafruit_SHT31.h"
+Adafruit_SHT31 sht31 = Adafruit_SHT31();
 
 //for OTA
-#include <ESP8266mDNS.h>
-#include <WiFiUdp.h>
-#include <ArduinoOTA.h>					//https://github.com/esp8266/Arduino/tree/master/libraries/ArduinoOTA
-bool OTAConfigured = 0;
+//#include <ESPmDNS.h>
+//#include <WiFiUdp.h>
+//#include <ArduinoOTA.h>
+//bool OTAConfigured = 0;
 
-//#define BLYNK_DEBUG					//Optional, this enables lots of prints
+//#define BLYNK_DEBUG				// Optional, this enables lots of prints
+/* Comment this out to disable prints and save space */
 //#define BLYNK_PRINT Serial
-#include <ESP8266WiFi.h>          			//ESP8266 Core WiFi Library (you most likely already have this in your sketch)
-#include <BlynkSimpleEsp8266.h>				//https://github.com/blynkkk/blynk-library
-#include <SimpleTimer.h>				//https://github.com/jfturcot/SimpleTimer
-#include <TimeLib.h>					//https://github.com/PaulStoffregen/Time
-#include <WidgetRTC.h>
-WidgetBridge bridge1(V20);				//Initiating Bridge Widget on V20 of Device A
-WidgetTerminal terminal(V40);				//Attach virtual serial terminal to Virtual Pin V40
-WidgetLED LED_CO(V8);					//Inicjacja diody LED dla załączania CO
-SimpleTimer Timer;					//Timer do sprawdzania połaczenia z BLYNKiem (co 30s) i uruchamiania MainFunction (co 3s)
-WidgetRTC rtc;						//Inicjacja widgetu zegara czasu rzeczywistego RTC
+//#include <WiFi.h> //alreadydeclared for AutoConnect
+#include <WiFiClient.h>
+#include <BlynkSimpleEsp32.h>		// Replace 'BlynkSimpleEsp8266' with 'BlynkSimpleEsp32.h. for ESP32
+#include <SimpleTimer.h>			// https://github.com/jfturcot/SimpleTimer
+#include <TimeLib.h>
+SimpleTimer Timer;					// Timer do sprawdzania połaczenia z BLYNKiem (co 30s) i uruchamiania MainFunction (co 3s)
+int timerID;						// Przetrzymuje ID Timera, potrzebne dla przycisku i włączania ekranu
 
-int		Tryb_Sterownika		= 0;		//Tryb_Sterownika 0 = AUTO, 1 = ON, 2 = OFF, 3 = MANUAL
-float		SetTempManual		= 21;		//Temperatura nastawiana manualnie z aplikacji Blynka 
-float		SetTempActual		= 18.5;		//Temperatura według której sterowana jest temperatura (auto lub manual)
+#include <WidgetRTC.h>
+WidgetBridge bridge1(V20);			// Initiating Bridge Widget on V20 of Device A
+WidgetTerminal terminal(V40);		// Attach virtual serial terminal to Virtual Pin V40
+WidgetLED	LED_CO(V8);				// Inicjacja diody LED dla załączania CO
+WidgetRTC	rtc;					// Inicjacja widgetu zegara czasu rzeczywistego RTC
+
+int			Tryb_Sterownika		= 0;		// Tryb_Sterownika 0 = AUTO, 1 = ON, 2 = OFF, 3 = MANUAL
+float		SetTempManual		= 21;		// Temperatura nastawiana manualnie z aplikacji Blynka 
+float		SetTempActual		= 18.5;		// Temperatura według której sterowana jest temperatura (auto lub manual)
 float		SetTempSchedule[7][24]	= {
 //00:00 01:00 02:00 03:00 04:00 05:00 06:00 07:00 08:00 09:00 10:00 11:00 12:00 13:00 14:00 15:00 16:00 17:00 18:00 19:00 20:00 21:00 22:00 23:00
-  {18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.8, 20.8, 20.8, 20.8, 20.8, 20.8, 20.8, 20.8, 18.5, 18.5 },  //Niedziela
-  {18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.8, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.8, 20.8, 20.8, 20.8, 20.8, 20.8, 20.8, 18.5, 18.5 },  //Poniedziałek
-  {18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.8, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.8, 20.8, 20.8, 20.8, 20.8, 20.8, 20.8, 18.5, 18.5 },  //Wtorek
-  {18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.8, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.8, 20.8, 20.8, 20.8, 20.8, 20.8, 20.8, 18.5, 18.5 },  //Środa
-  {18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.8, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.8, 20.8, 20.8, 20.8, 20.8, 20.8, 20.8, 18.5, 18.5 },  //Czwartek
-  {18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.8, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.8, 20.8, 20.8, 20.8, 20.8, 20.8, 20.8, 18.5, 18.5 },  //Piątek
-  {18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5 }   //Sobota
+  {18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.6, 20.6, 20.6, 20.6, 18.5 },  // Niedziela
+  {18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.6, 20.6, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.6, 20.6, 20.6, 20.6, 20.6, 20.6, 18.5 },  // Poniedziałek
+  {18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.6, 20.6, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.6, 20.6, 20.6, 20.6, 20.6, 20.6, 18.5 },  // Wtorek
+  {18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.6, 20.6, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.6, 20.6, 20.6, 20.6, 20.6, 20.6, 18.5 },  // Środa
+  {18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.6, 20.6, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.6, 20.6, 20.6, 20.6, 20.6, 20.6, 18.5 },  // Czwartek
+  {18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.6, 20.6, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.6, 20.6, 20.6, 20.6, 20.6, 20.6, 18.5 },  // Piątek
+  {18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.6, 18.5 }   // Sobota
 }; //Ustawienia temperatury dla poszczególnych dni/godzin, temperatura musi być pomiędzy 14 a 26 stopni Celsjusza z dokładnością do 1 miejsca po przecinku
+int			OLED_ON				= 1;		// Przyjmuje wartość '1' dla OLED włączony i '0' dla OLED wyłączony
+boolean		Podlane				= true;		// Przyjmuje wartość true gdy podlane czyli wilgotność >80% i false gdy sucho wilgotność <60%
+boolean		SoilNotification70	= false;	// Przyjmuje wartość true gdy wysłano notyfikacje o wilgotności 70%, true po podlaniu
+boolean		SoilNotification60	= false;	// Przyjmuje wartość true gdy wysłano notyfikacje o wilgotności 60%, true po podlaniu
+boolean		SoilNotification50	= false;	// Przyjmuje wartość true gdy wysłano notyfikacje o wilgotności 50%, true po podlaniu
+boolean		RestartESP			= false;	// Gdy true i w terminalu YES wykona restart
+float		RH					= 0;		// Soil Relative Humidity in % 
+long		CZAS_START_MANUAL	= 0;		// Ustawienie czasu przejścia sterowania w trym MANUAL (wartość w sekundach)
+long		CZAS_START_AUTO		= 0;		// Ustawienie czasu przejścia sterowania w trym AUTO (wartość w sekundach)
+int			dzien				= 0;		// day of the week (1-7), Sunday is day 1
+int			godz				= 1;		// the hour now (0-23)
+float		dewPoint(NAN), absHum(NAN), heatIndex(NAN);	// Zmienne dla danych z czujnika BME280
+float		Temp_SHT31t			= 1;		// Temperatura z czujnika SHT31 [°C]
+float		Hum_SHT31t			= 2;		// Wilgotność z czujnika SHT31 [%]
+float		Temp_DS18B20		= 3;		// Temperatura z czujnika DS18B20 [°C]
 
-int		OLED_ON			= 1;		//Przyjmuje wartość '1' dla OLED włączony i '0' dla OLED wyłączony
-boolean		Podlane			= true;		//Przyjmuje wartość true gdy podlane czyli wilgotność >80% i false gdy sucho wilgotność <60%
-boolean		SoilNotification70	= false;	//Przyjmuje wartość true gdy wysłano notyfikacje o wilgotności 70%, true po podlaniu
-boolean		SoilNotification60	= false;	//Przyjmuje wartość true gdy wysłano notyfikacje o wilgotności 60%, true po podlaniu
-boolean		SoilNotification50	= false;	//Przyjmuje wartość true gdy wysłano notyfikacje o wilgotności 50%, true po podlaniu
-float		RH 			= 0;		//Soil Relative Humidity in % 
-long		CZAS_START_MANUAL	= 0;		//Ustawienie czasu przejścia sterowania w trym MANUAL (wartość w sekundach)
-long		CZAS_START_AUTO		= 0;		//Ustawienie czasu przejścia sterowania w trym AUTO (wartość w sekundach)
-int		dzien			= 0;		//day of the week (1-7), Sunday is day 1
-int		godz			= 1;		//the hour now (0-23)
-float		temp(NAN), hum(NAN), pres(NAN), dewPoint(NAN), absHum(NAN), heatIndex(NAN);	//Zmienne dla danych z czujnika BME280
+bool		backlight			= HIGH;
+#define 	BUTTON				  16		// pin dla przycisku
+#define		backlightPin		  2			// 2 corresponds to GPIO2
+#define		HeatCO				  12		// Pin do włączania CO w sterowniku w łazience (D6 = GPIO12)
+boolean		isScreenON			= true;		// TRUE jeśli ekran świeci FALSE jeśli nie świeci
 
 //STAŁE
-const char	ssid[]			= "ECN";
-const char	pass[]			= "Pecherek1987";
-const char	auth[]			= "f0871fc6d0104ea3b9a374d246992932";	//Token Pokój Rymanowska
-const int	HeatCO			= D6;		//Pin do włączania CO w sterowniku w łazience
-const int	MinTemp			= 14;		//Najniższa możliwa temperatura do ustawienia
-const int	MaxTemp			= 26;		//Najwyższa możliwa temperatura do ustawienia
-const float	TemtHist		= 0.2;		//histereza dla temperatury
-const float	HumidHist		= 5;		//histereza dla wilgotności
-
+//const char	ssid[]			= "Your SSID";							// Not required with AutoConnect
+//const char	pass[]			= "Router password";					// Not required with AutoConnect
+const char		auth[]			= "SCrogkMuHEkHkHJCS1Yl0WMb6gaiQv78";	// Token Pokój Rymanowska
+const char		server[] 		= "192.168.1.204";  					// IP for your Local Server or DNS server addres stecko.duckdns.org
+const int		port 			= 8080;									// Port na którym jest serwer Blykn
+const int		MinTemp			= 14;		// Najniższa możliwa temperatura do ustawienia
+const int		MaxTemp			= 26;		// Najwyższa możliwa temperatura do ustawienia
+const float		TemtHist		= 0.2;		// histereza dla temperatury
+const float		HumidHist		= 5;		// histereza dla wilgotności
+const String	hostname 		= "PokojRymanowska_ESP32";
 //---------------------------------------------------------------------------------------------------------------------------------------------
+
+
+//Draw a progress bar - increasing percentage only
+void drawProgressBar(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint8_t percent, uint16_t frameColor, uint16_t barColor) {
+  if (percent == 0) {
+    tft.fillRoundRect(x, y, w, h, 3, TFT_BLACK);
+  }
+  uint8_t margin = 2;
+  uint16_t barHeight = h - 2 * margin;
+  uint16_t barWidth  = w - 2 * margin;
+  tft.drawRoundRect(x, y, w, h, 3, frameColor);
+  tft.fillRect(x + margin, y + margin, barWidth * percent / 100.0, barHeight, barColor);
+}
 
 //Informacja że połączono z serwerem Blynk, synchronizacja danych
 BLYNK_CONNECTED()
 {
 	Serial.println("Reconnected, syncing with cloud.");
-	bridge1.setAuthToken("c1614814b4b64afb8ab15c23620ed60d"); // Token of the hardware B (Łazienka)
+	bridge1.setAuthToken("q3lvQ_5iEAtG06rXBrmUtsPZ_2DhuGQj"); // Token of the hardware B (Łazienka)
 	rtc.begin();
 	Blynk.syncAll();
 }
@@ -136,7 +171,7 @@ void blynkCheck()
 	}
 }
 
-//Over-The-Air w skrócie OTA umożliwia przesyłanie plików do urządzeń przez sieć WiFi
+/*//Over-The-Air w skrócie OTA umożliwia przesyłanie plików do urządzeń przez sieć WiFi
 void OTA_Handle()
 {
 	if (OTAConfigured == 1)
@@ -149,11 +184,11 @@ void OTA_Handle()
 	{
 		if (WiFi.waitForConnectResult() == WL_CONNECTED)
 		{
-			// Port defaults to 8266
-			ArduinoOTA.setPort(8266);
+			// Port defaults to 3232
+			ArduinoOTA.setPort(3232);
 
 			// Hostname defaults to esp8266-[ChipID]
-			ArduinoOTA.setHostname("Pokoj_Rymanowska");
+			ArduinoOTA.setHostname("Pokoj_Rym_ESP32");
 
 			// No authentication by default
 			//ArduinoOTA.setPassword("admin");
@@ -175,7 +210,14 @@ void OTA_Handle()
 			});
 			
 			ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+			//digitalWrite(2, HIGH);	//Ustawienie wartośći HIGH = podświetlanie włączone
 			Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+			//if (progress < 1) tft.fillScreen(TFT_BLACK);
+			//tft.setCursor(60, 60);
+			//tft.setTextColor(TFT_WHITE, TFT_BLACK);
+			//tft.setTextWrap(true);
+			//tft.println("OTA upload...");
+			//drawProgressBar(10, 130, 20, 22, (progress / (total / 100)), 0x06DC, 0x3FE0);
 			});
 			
 			ArduinoOTA.onError([](ota_error_t error) {
@@ -197,6 +239,7 @@ void OTA_Handle()
 		}
 	}
 }
+*/
 
 //Ustawienie trybów sterowania i temperatury do załączenia pieca CO
 void TrybManAuto()
@@ -207,29 +250,27 @@ void TrybManAuto()
 		CZAS_START_MANUAL = 0;		//Zerowanie czasu uruchomienia tryby MANUALNEGO, czyli wyłączenie załączanie czasowego
 		Blynk.virtualWrite(V11, 4);	//Ustawienie widgetu BLYNK w tryb MAN
 		Tryb_Sterownika = 3;		//Tryb_Sterownika 0 = AUTO, 1 = ON, 2 = OFF, 3 = MANUAL
+		Blynk.setProperty(V12,"color","#ff9b00");
 		//reset Time Input widget in app
-		int startAt = - 1;
-		int stopAt;
 		if (CZAS_START_AUTO == 0)
 		{
-			stopAt = - 1;
+			CZAS_START_AUTO = - 1;
 		}
-		else
-		{
-			stopAt = CZAS_START_AUTO;
-		}
-		Blynk.virtualWrite(V13, startAt, stopAt, "Europe/Warsaw");
-	} 
+		Blynk.virtualWrite(V13, -1, CZAS_START_AUTO, "Europe/Warsaw");		//Kasowanie StartManual
+	}
 	// Start Auto za pomocą Time Input
 	if (CZAS_START_AUTO > 0 && hour(now()) * 60 + minute(now()) == CZAS_START_AUTO / 60)		//Tryb_Sterownika 0 = AUTO, 1 = ON, 2 = OFF, 3 = MANUAL
 	{
 		CZAS_START_AUTO = 0;		//Zerowanie czasu uruchomienia tryby AUTOMATYCZNEGO, czyli wyłączenie załączanie czasowego
 		Blynk.virtualWrite(V11, 1);	//Ustawienie widgetu BLYNK w tryb AUTO
 		Tryb_Sterownika = 0;		//Tryb_Sterownika 0 = AUTO, 1 = ON, 2 = OFF, 3 = MANUAL
+		Blynk.setProperty(V12,"color","#403b34");
 		//reset Time Input widget in app
-		int startAt = - 1;
-		int stopAt = - 1;
-		Blynk.virtualWrite(V13, startAt, stopAt, "Europe/Warsaw");
+		if (CZAS_START_MANUAL == 0)
+		{
+			CZAS_START_MANUAL = - 1;
+		}
+		Blynk.virtualWrite(V13, CZAS_START_MANUAL, -1, "Europe/Warsaw");	//Kasowanie StartAuto
 	}
 
 	dzien = weekday(now()) - 1;			//day of the week (1-7), Sunday is day 1
@@ -244,9 +285,9 @@ void TrybManAuto()
 	}
 	else if (Tryb_Sterownika == 1)		//Tryb ON,  temperatura w zmiennej SetTempActual ustawiana tylko jeśli różna od zadanej w SetTempSchedule
 	{
-		if(SetTempActual != temp)
+		if(SetTempActual != Temp_SHT31t)
 		{
-			SetTempActual = temp;
+			SetTempActual = Temp_SHT31t;
 		}
 	}
 	else if (Tryb_Sterownika == 2)		//Tryb OFF,  temperatura w zmiennej SetTempActual ustawiana tylko jeśli różna od 0 (zera)
@@ -265,25 +306,36 @@ void TrybManAuto()
 	}
 }
 
-//Odczyt wskazań z czujnika BME280
-void Read_BME280_Values()
+//Odczyt wskazań z czujnika SHT31
+void Read_SHT31_Values()
 {
-	BME280::TempUnit tempUnit(BME280::TempUnit_Celsius);
-	BME280::PresUnit presUnit(BME280::PresUnit_hPa);
-
-	bme.read(pres, temp, hum, tempUnit, presUnit);
-	temp = temp -4.2;						//Korekta dla temperatury. BME280 się trochę grzeje 
-	pres = pres + 24.634;						//Korekta dostosowująca do ciśnienia na poziomie morza
-	hum  = hum + 9.06;						//Korekta poziomu wilgotności odczytanegoe prze BME280.
+	Temp_SHT31t	= sht31.readTemperature() -1.5;		//Korekta dla temperatury dla czujnika SHT31
+	Hum_SHT31t	= sht31.readHumidity() + 0;		//Korekta poziomu wilgotności dla czujnika SHT31
 
 	EnvironmentCalculations::TempUnit     envTempUnit =  EnvironmentCalculations::TempUnit_Celsius;
 	//Dane obliczane na podstawie danych z czujnika
-	dewPoint = EnvironmentCalculations::DewPoint(temp, hum, envTempUnit);
-	absHum = EnvironmentCalculations::AbsoluteHumidity(temp, hum, envTempUnit);
-	heatIndex = EnvironmentCalculations::HeatIndex(temp, hum, envTempUnit);
+	dewPoint	= EnvironmentCalculations::DewPoint(Temp_SHT31t, Hum_SHT31t, envTempUnit);
+	absHum		= EnvironmentCalculations::AbsoluteHumidity(Temp_SHT31t, Hum_SHT31t, envTempUnit);
+	heatIndex	= EnvironmentCalculations::HeatIndex(Temp_SHT31t, Hum_SHT31t, envTempUnit);
 }
 
-//Działą jak map() ale zwraca liczby rzeczywiste a nie tylko całkowite
+//Odczyt wskazań z czujnika BME280
+void Read_DS18B20_Values()
+{
+	//DS18B20.requestTemperatures(); 				// Wystłanie prośby o odczyt temperatury, bedzie gotowa na potem
+	//Temp_DS18B20	= DS18B20.getTempC(DS18B20_Address) - 0.8;	// Odczyt temperatury
+
+	if(sensor.isConversionComplete())		// wait until sensor is ready
+	{
+		Serial.print("Temp: ");
+		Serial.println(sensor.getTempC());
+		Temp_DS18B20	= sensor.getTempC() - 0.94;	// Odczyt temperatury
+		sensor.requestTemperatures();
+	}
+
+}
+
+//Działa jak map() ale zwraca liczby rzeczywiste a nie tylko całkowite
 double mapf(double val, double in_min, double in_max, double out_min, double out_max)
 {
     return (val - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
@@ -293,15 +345,22 @@ double mapf(double val, double in_min, double in_max, double out_min, double out
 float ReadSoilMoisture()
 {
 	int i;
-	double sval = 0;
-
+	float sval = 0;
+	int shArray[6];
+	int maxSH = 0;
+	int minSH = 4095;
 	for (i = 0; i < 5; i++)
-	{		//Uśrednianie wartości z czujnika analogowego
-		sval = sval + analogRead(A0);	// Soilmoisture sensor is connected to GPIO 34 (Analog ADC1_CH6)
+	{   //Uśrednianie wartości z czujnika analogowego (5 wartości pomijając ekstrema)
+	delay(5);
+	shArray[i] = analogRead(34);
+	if ( shArray[i] > maxSH ) maxSH = shArray[i];
+	if ( shArray[i] < minSH ) minSH = shArray[i];
+	sval = sval + shArray[i];
 	}
-	sval = sval / 5;
-	sval = mapf(sval, 847, 475, 0, 100);	//Convert to Relative Humidity in % (818 -> sensor in air, 427 -> sensor in water)
-	//sval = constrain(sval, 0, 100);		//Limits range of sensor values to between 10 and 150
+	sval = sval - maxSH - minSH;
+	sval = sval / 3;
+	sval = mapf(sval, 3550, 2000, 0, 100);  //Convert to Relative Humidity in % (818 -> sensor in air, 427 -> sensor in water)
+	//sval = constrain(sval, 0, 100);   //Limits range of sensor values to between 10 and 150
 	//informacja o podlaniu
 	if (sval > 80 && Podlane == false)
 	{
@@ -345,14 +404,14 @@ void Room_Temp_Control()
 		LED_CO.on();				//Piec CO grzeje
 		digitalWrite(LED_BUILTIN, LOW);		//Niebieska dioda WEMOSA gaśnie
 	}
-	else if (temp < SetTempActual - TemtHist)
+	else if (Temp_SHT31t < SetTempActual - TemtHist)
 	{
 		bridge1.digitalWrite(HeatCO, 0);	//Wysłanie sygnału do włączenia pieca
 		LED_CO.on();				//Piec CO grzeje
 		bridge1.virtualWrite(V18, true); 	//Wysłanie informacji do sterownika w łazience że piec grzeje
 		digitalWrite(LED_BUILTIN, LOW);		//Niebieska dioda WEMOSA gaśnie
 	}
-	else if (temp > SetTempActual + TemtHist)
+	else if (Temp_SHT31t > SetTempActual + TemtHist)
 	{
 		bridge1.digitalWrite(HeatCO, 1023);	//Wysłanie sygnału do wyłączenia pieca (1023 bo piny obsługują PWM i nadanie "1" nie działa)
 		LED_CO.off();				//Piec CO nie grzeje
@@ -361,62 +420,54 @@ void Room_Temp_Control()
 	}
 }
 
-//Wyświetlanie na ekranie OLED 0.96"
+//Wyłączenie podświetlania sedesu
+void ScreenOFF()
+{
+	backlight = LOW;
+	delay(10);
+	digitalWrite(2, backlight);			//Ustawienie wartośći HIGH = podświetlanie włączone
+	isScreenON = false;
+	tft.fillScreen(TFT_BLACK);
+}
+
+//Wyświetlanie na ekranie LED 1,3""
 void OLED_Display()
 {
-	if (OLED_ON == 1)
+	if (isScreenON)
 	{
-		//Wyświetlanie dane na OLED
-		String DispTemp = "Temp:               " + String(temp) + "     "+ char(176) + "C";
-		String DispPress = "Press:            " + String(pres) +"   hPa";
-		String DispHum = "Hum:               "+String(hum) + "      %";
-		String DispdewPoint = "DewPoint:       " + String(dewPoint) + "     " + char(176) + "C";
-		String DispabsHum = "AbsHum:         " + String(absHum) +"   g/m" + char(179);
+		//Dla nadpisywania poprzedniej wartości https://github.com/Bodmer/TFT_eSPI/blob/master/examples/480%20x%20320/TFT_Padding_demo/TFT_Padding_demo.ino
+		byte font = 2;
+		int padding = tft.textWidth("999.9999", font); // get the width of the text in pixels
+		tft.setTextPadding(padding);
+		//tft.fillScreen(TFT_BLACK);
+		//tft.setFreeFont(&FreeMonoBold12pt7b);
+		tft.setTextSize(1);
+		//Temperature
+		tft.setCursor(0, 15);
+		tft.setTextColor(TFT_ORANGE, TFT_BLACK);
+		tft.println(" Set:                 " + String(SetTempActual) + " `C");
+		tft.setTextColor(TFT_RED, TFT_BLACK);
+		tft.println(" Actual:           " + String(Temp_SHT31t) +" `C");
+		//Wilgotność powietrza
+		tft.setTextColor(TFT_BLUE, TFT_BLACK);
+		tft.println(" Hum:              " + String(Hum_SHT31t) + " %");
+		//Wilgotność gleby
+		tft.setTextColor(TFT_GREEN, TFT_BLACK);
+		tft.println(" SMoist:         " + String(RH) + " %");
+		//Temperatura DS18B20
+		tft.setTextColor(TFT_CYAN, TFT_BLACK);
+		tft.println(" DS18B20:   " + String(Temp_DS18B20) + " `C");
 
-		String currentTime = String(hour()) + ":" + minute() + ":" + second();
-		String currentDate = String(day()) + " " + month() + " " + year();
 
-		u8g2.clearBuffer();
-		u8g2.setFontMode(1);
-		u8g2.setFont(u8g2_font_helvR08_tf);
-		u8g2.drawStr(0,9,"Set:");
 
-		if (Tryb_Sterownika != 2)
-		{
-			u8g2.setCursor(40,28);
-			u8g2.print("°C");
-		}
-		u8g2.setCursor(40+64,28);
-		u8g2.print("°C");
-		u8g2.drawStr(64,9,"Actual:");
-		u8g2.setFont(u8g2_font_logisoso16_tf); 
-		u8g2.setCursor(3,35);
-
-		if (Tryb_Sterownika != 2)
-		{
-			u8g2.print(SetTempActual,1);
-		}
-		else
-		{
-			u8g2.print("OFF");
-		}
-		//u8g2.print(SetTempActual,1);
-		u8g2.setCursor(64,35);
-		u8g2.print(temp,1);
-		//Wyświetlanie aktualnego czasu
-		u8g2.setFont(u8g2_font_helvR08_tf);   
-		u8g2.setCursor(0,64);
-		u8g2.print(currentTime);
-		//Wyświetlanie aktualnej daty  
-		u8g2.setCursor(75,64);
-		u8g2.print(currentDate);
-		u8g2.sendBuffer();
+		//tft.setTextPadding(padding);
+		//tft.drawFloat(Temp_SHT31t, 20, 10, 150, 4);
 	}
-	else if (OLED_ON == 0)
+	else
 	{
-		u8g2.clearBuffer();
-		u8g2.sendBuffer();
+		ScreenOFF();
 	}
+	
 }
 
 //Zwraca siłę sygnału WiFi sieci do której jest podłączony w %. REF: https://www.adriangranados.com/blog/dbm-to-percent-conversion
@@ -425,19 +476,71 @@ int WiFi_Strength (long Signal)
 	return constrain(round((-0.0154*Signal*Signal)-(0.3794*Signal)+98.182), 0, 100);
 }
 
+//signal strength levels https://www.netspotapp.com/what-is-rssi-level.html
+String WiFi_levels(long Signal)
+{
+	if (Signal >= -50)
+	{
+		return "Excellent";
+	}
+	else if (Signal < -50 && Signal >= -60)
+	{
+		return "Very good";
+	}
+	else if (Signal < -60 && Signal >= -70)
+	{
+		return "Good";
+	}
+	else if (Signal < -70 && Signal >= -80)
+	{
+		return "Low";
+	}
+	else if (Signal < -80 && Signal >= -90)
+	{
+		return "Very low";
+	}
+	return "Unusable";
+}
+
 //Wysyłanie danych na serwer Blynka
 void Wyslij_Dane()
 {
-	Blynk.virtualWrite(V0, temp);				//Temperatura [°C]
-	Blynk.virtualWrite(V1, hum);				//Wilgotność [%]
-	Blynk.virtualWrite(V2, pres);				//Ciśnienie [hPa]
-	Blynk.virtualWrite(V3, dewPoint);			//Temperatura punktu rosy [°C]
-	Blynk.virtualWrite(V4, absHum);				//Wilgotność bezwzględna [g/m³]
-	Blynk.virtualWrite(V5, heatIndex);			//Temperatura odczuwalna [°C] 
-	Blynk.virtualWrite(V6, RH);				//Wilgotność gleby [%]  
-	Blynk.virtualWrite(V18, SetTempActual);			//Temperatura zadana [°C]
-	Blynk.virtualWrite(V25, WiFi_Strength(WiFi.RSSI()));	//Siła sygnału Wi-Fi [%], constrain() limits range of sensor values to between 0 and 100
-	bridge1.virtualWrite(V21, hum);				//Wilgotność w pokoju wysyłana do sterownika w łazience [%]
+
+	Blynk.virtualWrite(V0, Temp_SHT31t);			// Temperatura z czujnika SHT31 [°C]
+	Blynk.virtualWrite(V1, Hum_SHT31t);				// Wilgotność z czujnika SHT31 [%]
+	Blynk.virtualWrite(V2, Temp_DS18B20);			// Temperatura z czujnika DS18B20 [°C]
+	Blynk.virtualWrite(V3, dewPoint);				// Temperatura punktu rosy [°C]
+	Blynk.virtualWrite(V4, absHum);					// Wilgotność bezwzględna [g/m³]
+	Blynk.virtualWrite(V5, heatIndex);				// Temperatura odczuwalna [°C] 
+	Blynk.virtualWrite(V6, RH);						// Wilgotność gleby [%]  
+	Blynk.virtualWrite(V18, SetTempActual);			// Temperatura zadana [°C]
+	Blynk.virtualWrite(V25, WiFi_Strength(WiFi.RSSI()));	// Siła sygnału Wi-Fi [%], constrain() limits range of sensor values to between 0 and 100
+	bridge1.virtualWrite(V21, Hum_SHT31t);			// Wilgotność w pokoju wysyłana do sterownika w łazience [%]
+}
+
+//Obsługa przerwań wywoływanych przez cprzycisk
+//ICACHE_RAM_ATTR void handleInterrupt()
+IRAM_ATTR void handleInterrupt() 
+{
+	
+	if ( isScreenON && Timer.isEnabled(timerID))
+	{
+		Timer.restartTimer(timerID);				//Wydłuża iluminacje sedesu o kolejne 30s
+	}
+	else if (isScreenON == false)					//JEśli ekran jest wyłączony
+	{
+		timerID = Timer.setTimeout(50000, ScreenOFF);//Wyłączy iluminacje sedesu za 50s
+		backlight = HIGH;
+		digitalWrite(2, backlight);			//Ustawienie wartośći HIGH = podświetlanie włączone
+		isScreenON = true;
+	}
+
+}
+
+//Wyłącza możliwość restartu ESP (timer ustawiony na 30s)
+void RestartCounter()
+{
+	RestartESP = false;	// Gdy true i w terminalu YES wykona restart
 }
 
 //Obsługa terminala
@@ -449,49 +552,87 @@ BLYNK_WRITE(V40)
 	if (String("ports") == TerminalCommand)
 	{
 		terminal.clear();
-		terminal.println("PORT     DESCRIPTION        UNIT");
-		terminal.println("V0   ->  Temperature        °C");
-		terminal.println("V1   ->  Humidity           %");
-		terminal.println("V2   ->  Pressure           HPa");
-		terminal.println("V3   ->  DewPoint           °C");
-		terminal.println("V4   ->  Abs Humidity       g/m3");
-		terminal.println("V5   ->  Heat Index         °C");
-		terminal.println("V6   ->  Wilgotność gleby   %");
-		terminal.println("V10  <-  OLED_ON            1/0");
-		terminal.println("V11  <-  Tryb_Sterownika    1,2,3,4");
-		terminal.println("V12  <-  SetTempManual      °C");
-		terminal.println("V13  <-  BLYNK Timer        sec");
-		terminal.println("V25  ->  WiFi Signal        %");
-		terminal.println("V40 <->  Terminal           String");
+		terminal.println("PORT    DESCRIPTION        UNIT");
+		terminal.println("V0   -> SHT31 temp         °C");
+		terminal.println("V1   -> SHT31 hum          %");
+		terminal.println("V2   -> DS18B21 temp       °C");
+		terminal.println("V3   -> DewPoint           °C");
+		  terminal.print("V4   -> Abs Humidity       g/m");
+		terminal.println("\xc2\xb3");	// \xc2\xb3 -->  ^3 potęga 3 https://www.utf8-chartable.de/unicode-utf8-table.pl?start=128&number=128&utf8=string-literal&unicodeinhtml=hex
+		terminal.println("V5   -> Heat Index         °C");
+		terminal.println("V6   -> Wilgotność gleby   %");
+		terminal.println("V10  <- OLED_ON            1/0");
+		terminal.println("V11  <- Tryb_Sterownika    1,2,3,4");
+		terminal.println("V12  <- SetTempManual      °C");
+		terminal.println("V13  <- BLYNK Timer        sec");
+		terminal.println("V25  -> WiFi Signal        %");
+		terminal.println("V40 <-> Terminal           String");
 	}
 	else if (String("values") == TerminalCommand)
 	{
 		terminal.clear();
-		terminal.println("PORT   DATA              VALUE ");
-		terminal.print("V0     Temperature   =   ");
-		terminal.print(temp);
+	      terminal.println("PORT   DATA         VALUE ");
+		terminal.print("V0   SHT31 temp   = ");
+		terminal.print(Temp_SHT31t);
 		terminal.println(" °C");
-		terminal.print("V1     Humidity      =   ");
-		terminal.print(hum);
+		terminal.print("V1   SHT31 hum    = ");
+		terminal.print(Hum_SHT31t);
 		terminal.println(" %");
-		terminal.print("V2     Pressure      =   ");
-		terminal.print(pres);
-		terminal.println(" HPa");
-		terminal.print("V3     DewPoint      =   ");
+		terminal.print("V2   DS18B21 temp = ");
+		terminal.print(Temp_DS18B20);
+		terminal.println(" °C");
+		terminal.print("V3   DewPoint     = ");
 		terminal.print(dewPoint);
 		terminal.println(" °C");
-		terminal.print("V4     Abs Humidity  =   ");
+		terminal.print("V4   Abs Humidity = ");
 		terminal.print(absHum);
-		terminal.println(" g/m3");
-		terminal.print("V5     Heat Index    =   ");
+		terminal.print(" g/m");
+		terminal.println("\xc2\xb3");	// \xc2\xb3 -->  ^3 potęga 3 https://www.utf8-chartable.de/unicode-utf8-table.pl?start=128&number=128&utf8=string-literal&unicodeinhtml=hex
+		terminal.print("V5   Heat Index   = ");
 		terminal.print(heatIndex);
 		terminal.println(" °C");
-		terminal.print("V10    OLED_ON       =   ");
-		terminal.print(OLED_ON);
-		terminal.println(" ");
-		terminal.print("V25    WiFi Signal   =   ");
+		terminal.print("V10  OLED_ON      = ");
+		terminal.println(OLED_ON);
+		terminal.print("V25  WiFi Signal  = ");
 		terminal.print(WiFi_Strength(WiFi.RSSI()));
-		terminal.println(" %");
+		terminal.print("%, ");
+		terminal.print(WiFi.RSSI());
+		terminal.print("dBm, ");
+		terminal.println(WiFi_levels(WiFi.RSSI()));
+		terminal.print("AutoConnect IP    = ");
+		terminal.print(WiFi.localIP().toString() + "/_ac");
+	}
+	else if (String("constant") == TerminalCommand)
+	{
+		terminal.clear();
+	      terminal.println("CONSTANT      VALUE ");
+		terminal.print("MinTemp    =  ");
+		terminal.print(MinTemp);
+		terminal.println("°C");		
+		terminal.print("MaxTemp    =  ");
+		terminal.print(MaxTemp);
+		terminal.println("°C");			
+		terminal.print("TemtHist   = ±");
+		terminal.print(TemtHist);
+		terminal.println("°C");
+		terminal.print("HumidHist  = ±");
+		terminal.print(HumidHist);
+		terminal.println("%");
+	}
+	else if (String("restart") == TerminalCommand)
+	{
+		terminal.clear();
+		terminal.println("Are you sure you want to restart?");
+		terminal.println("Type YES if you are sure to restart...");
+		RestartESP = true;	//Gdy true i w terminalu YES wykona restart
+		Timer.setTimeout(30000, RestartCounter);
+	}
+	else if (String("yes") == TerminalCommand)
+	{
+		if (RestartESP)
+		{
+			ESP.restart();
+		}
 	}
 	else if (String("hello") == TerminalCommand)
 	{
@@ -528,6 +669,8 @@ BLYNK_WRITE(V40)
 		terminal.clear();
 		terminal.println("Type 'PORTS' to show list");
 		terminal.println("Type 'VALUES' to show sensor data");
+		terminal.println("Type 'CONSTANT' show constant values");
+		terminal.println("Type 'RESTART' to restart.");
 		terminal.println("Type 'CLS' to clear terminal");
 		terminal.println("Type 'AUTOTEMP' to show Temp Schedule");
 		terminal.println("or 'HELLO' to say hello!");
@@ -547,105 +690,201 @@ BLYNK_WRITE(V11)
 {
 	switch (param.asInt())
 	{
-		case 1:				//AUTO
+		case 1:				// AUTO
 			Tryb_Sterownika = 0;
+			Blynk.setProperty(V12,"color","#403b34");
 			break;
-		case 2:				//ON
+		case 2:				// ON
 			Tryb_Sterownika = 1;
+			Blynk.setProperty(V12,"color","#403b34");
 			break;
-		case 3:				//OFF
+		case 3:				// OFF
 			Tryb_Sterownika = 2;
+			Blynk.setProperty(V12,"color","#403b34");
 			break;
-		case 4:				//MAN
+		case 4:				// MAN
 			Tryb_Sterownika = 3;
+			Blynk.setProperty(V12,"color","#ff9b00");
+			//Blynk.setProperty(V12,"label","SetT");
 			break;
-			default:		//Wartość domyślna AUTO
+		default:		// Wartość domyślna AUTO
 			Tryb_Sterownika = 0;
+			Blynk.setProperty(V12,"color","#403b34");
 	}
+	TrybManAuto();			//Uruchomienie funkcji TrybManAuto() aby zadziałało natychmiast
+	Room_Temp_Control(); 	//Uruchomienie funkcji Room_Temp_Control() aby zadziałało natychmiast
+
 }
 
 //Ustawienie progu temperatury poniżej której załączy się CO (plus próg)
 BLYNK_WRITE(V12)
 {
 	SetTempManual = param.asFloat();
+	Room_Temp_Control(); 	// Uruchomienie funkcji Room_Temp_Control() aby zadziałało natychmiast
 }
 
 //Obsługa timera Start Manual i Start Auto (Time Input Widget)
 BLYNK_WRITE(V13)
 {
-	CZAS_START_MANUAL = param[0].asLong();		//Ustawienie czasu przejścia sterowania w trym MANUAL (wartość w sekundach)
-	CZAS_START_AUTO = param[1].asLong();		//Ustawienie czasu przejścia sterowania w trym AUTO (wartość w sekundach)
+	CZAS_START_MANUAL = param[0].asLong();		// Ustawienie czasu przejścia sterowania w trym MANUAL (wartość w sekundach)
+	CZAS_START_AUTO = param[1].asLong();		// Ustawienie czasu przejścia sterowania w trym AUTO (wartość w sekundach)
 }
 
-//Uruchamia po kolei wszystkie niezbędne funcje
+//Robi wszystko co powinien
 void MainFunction()
 {
-	Read_BME280_Values();		//Odczyt danych z czujnika BME280
-	TrybManAuto();			//Ustawienie trybów sterowania i temperatury do załączenia pieca CO
-	RH = ReadSoilMoisture();	//Odczyt z czujnika wilgotności gleby i konwersja do wartości 0 - 100%
-	Room_Temp_Control();		//kontrola temperatury na podstawie odczytów z BME280
-	OLED_Display();			//Wyświetlanie na ekranie OLED 0.96"
-	//Wyslij_Dane();			//Wysyła dane do serwera Blynk
+	Read_SHT31_Values();		// Odczyt danych z czujnika SHT31
+	RH = ReadSoilMoisture();	// Odczyt z czujnika wilgotności gleby i konwersja do wartości 0 - 100%
+	Read_DS18B20_Values();		// Odczyt danych z czujnika DS18B20
+	TrybManAuto();				// Ustawienie trybów sterowania i temperatury do załączenia pieca CO
+	Room_Temp_Control();		// kontrola temperatury na podstawie odczytów z BME280
+	OLED_Display();				// Wyświetlanie na ekranie OLED 0.96"
+	Wyslij_Dane();				// Wysyła dane do serwera Blynk
+	if (Timer.isEnabled(timerID) == false && backlight == HIGH)
+	{
+		ScreenOFF();			// Wyłączenie podświetlania sedesu
+	}
 }
 
-//---------------------------------------------------------------------------------------------------------------------------------------------
+/***********************************************************************************************/
 
 void setup()
 {
 	Serial.begin(115200);
+	tft.init();				// initialize a ST7789 chip, 240x240 pixels
+	tft.fillScreen(TFT_BLACK);
+	tft.setTextFont(4);
+	tft.setCursor(0, 0);
+	//tft.setTextColor(WHITE);
+	tft.setTextColor(TFT_WHITE, TFT_BLACK);
+	tft.setTextWrap(true);
+	//tft.setRotation(0);
+	tft.println("ST7789 Initialized");
+	Serial.println("ST7789 Initialized");
+	delay(1500);
 
-	WiFi.mode(WIFI_STA);
-	WiFi.begin(ssid, pass);
-	//Blynk.config(auth);
+	//Deklaracja Pinów
+	pinMode(2, OUTPUT);							// Zasilanie ekranu - podświetlanie
+	digitalWrite(2, HIGH);						// Ustawienie wartośći HIGH = podświetlanie włączone
+	pinMode(BUTTON, INPUT_PULLUP);
+
+	//Ustawienia ADC
+	//analogSetSamples(1);						// Set number of samples in the range, default is 1, it has an effect on sensitivity has been multiplied
+	analogSetClockDiv(255);
+
+	attachInterrupt(digitalPinToInterrupt(BUTTON), handleInterrupt, RISING);	// Obsługa przerwań dla czujnika ruchu
+	timerID = Timer.setTimeout(50000, ScreenOFF);					// Wyłączy iluminacje sedesu za 500s
+
+
+	// Autoconnect
+	Config.apid = "PokojRymanowska_ESP32";		// SoftAP's SSID.
+	Config.psk = "12345678";					// Sets password for SoftAP. The length should be from 8 to up to 63.
+	Config.hostName = "PokojRymanowska_ESP32";	// Sets host name to SotAp identification
+	Config.homeUri = "/_ac";					// Sets home path of Sketch application
+	Config.retainPortal = true;					// Launch the captive portal on-demand at losing WiFi
+	Config.autoReconnect = true;				// Enable auto-reconnect
+	Config.ota = AC_OTA_BUILTIN;
+	Portal.config(Config);    					// Don't forget it.
+	//Server.on("/", rootPage);
+	
+	// Here to do when WiFi is not connected.
+	tft.fillScreen(TFT_BLACK);
+	tft.setCursor(0, 0);
+	tft.setTextSize(1);
+	tft.setTextColor(TFT_RED, TFT_BLACK);
+	tft.println(" No WiFi connection !");
+	tft.println(" Use captive portal:");
+	tft.setTextColor(TFT_YELLOW, TFT_BLACK);
+	tft.println(" ");
+	tft.print(" APID:  ");
+	tft.setTextColor(TFT_WHITE, TFT_BLACK);
+	tft.println(AUTOCONNECT_APID);
+	tft.setTextColor(TFT_YELLOW, TFT_BLACK);
+	tft.print(" Pass:  ");
+	tft.setTextColor(TFT_WHITE, TFT_BLACK);
+	tft.println(AUTOCONNECT_PSK);
+	
+	if (Portal.begin())
+	{	
+		tft.fillScreen(TFT_BLACK);
+		tft.setCursor(0, 0);
+		tft.println("WiFi connected:");
+		tft.println(" ");
+		tft.println(WiFi.localIP().toString());
+		Serial.println("WiFi connected: " + WiFi.localIP().toString());
+		delay(3000);
+	}
+	//WiFi.setHostname("ESP32_Rymanowska");
+	//WiFi.mode(WIFI_STA);
+	//WiFi.begin(ssid, pass);
+	Blynk.config(auth, server, port);   // for local servernon-blocking, even if no server connection
+	//Blynk.config(auth);				// For cloud
+
 
 	//Inicjalizacja Timerów
-	//Timer.setInterval(30000, blynkCheck);		//Co 30s zostanie sprawdzony czy jest sieć Wi-Fi i czy połączono z serwerem Blynk
-	Timer.setInterval(3000, MainFunction);		//Uruchamia wszystko w pętli co 3s
+	Timer.setInterval(30000, blynkCheck);		// Co 30s zostanie sprawdzony czy jest sieć Wi-Fi i czy połączono z serwerem Blynk
+	Timer.setInterval(3000, MainFunction);		// Uruchamia wszystko w pętli co 3s
+
+	//Inicjalizaczja czujnika SHT31
+	Wire.begin(33,32);  //Można podać zmieniać piny Wire.begin(sdaPin, sciPin); lub nic nie podawać i będzie domyślnie.
+	//sht31.heater(false);				// Wyłącza podgrzewanie sensora nie działa
+	if (! sht31.begin(0x44))
+	{	// Set to 0x45 for alternate i2c addr
+		Serial.println("Couldn't find SHT31");
+		tft.fillScreen(TFT_BLACK);  // Czyszczenie ekranu
+		tft.setTextColor(TFT_RED);
+		tft.setTextWrap(true);
+		//tft.setFreeFont(&FreeSans9pt7b);
+		tft.setCursor(3, 20);
+		tft.print("Couldn't find valid SHT31 sensor, check wiring!");
+		while (1) delay(1);
+	}
+
+
+	//Inicjalizaczja czujnika DS18B20
+	Serial.println(__FILE__);
+	Serial.print("DS18B20 Library version: ");
+	Serial.println(DS18B20_LIB_VERSION);
+	sensor.begin();
+	sensor.requestTemperatures();
+	
 
 	//Ustawianie pinów
-	pinMode(LED_BUILTIN, OUTPUT);					//Będzie mrugał diodą
+	pinMode(LED_BUILTIN, OUTPUT);			//Będzie mrugał diodą
 
 	//inicjowanie wyświetlacza
-	u8g2.begin();
-	u8g2.enableUTF8Print();
-	u8g2.setDisplayRotation(U8G2_R0);
-	u8g2.setFlipMode(1);						//Odwrócenie ekrany o 180 stopnie jeśli parametr = 1
+	tft.fillScreen(TFT_BLACK);  	// Czyszczenie ekranu
+	tft.setCursor(0, 0);
+	tft.setTextColor(TFT_WHITE, TFT_BLACK);
+	tft.setTextWrap(false);
+	tft.setTextSize(2);
+	tft.println(" ESP32:");
+	tft.setTextSize(1);
+	tft.setTextColor(TFT_WHITE, TFT_BLACK);
+	tft.println("");
+	delay(2000);
+	tft.fillScreen(TFT_BLACK);  	// Czyszczenie ekranu
 
-	u8g2.clearBuffer();
-	u8g2.setFontMode(1);
-	u8g2.setFont(u8g_font_helvB24);
-	u8g2.setCursor(0,33);
-	u8g2.print(F("BME280"));
-	u8g2.setFont(u8g_font_helvR08);
-	//u8g2.setCursor(0, 50);
-	//u8g2.print(clock.dateFormat("d-m-Y H:i:s", dt));
-	u8g2.setCursor(0, 64);
-	//u8g2.print("Connecting to: "+String(ssid));
-	u8g2.sendBuffer();
-
-	//inicjowanie czujnika BME280
-	Wire.begin();
-	if (!bme.begin())
-	{
-		Serial.println("Could not find a valid BME280 sensor, check wiring!");
-		while (1);
-	}
-	switch(bme.chipModel())
-	{
-	case BME280::ChipModel_BME280:
-		Serial.println("Found BME280 sensor! Success.");
-		break;
-	case BME280::ChipModel_BMP280:
-		Serial.println("Found BMP280 sensor! No Humidity available.");
-		break;
-	default:
-		Serial.println("Found UNKNOWN sensor! Error!");
-	}
+	blynkCheck(); 					// Piewsze połaczenie z Blynk, nie trzeba czekać 30s po restarcie
 }
 
 void loop()
 {
-	//if (Blynk.connected()) Blynk.run();
-	Timer.run();
-	OTA_Handle();			//Obsługa OTA (Over The Air) wgrywanie nowego kodu przez Wi-Fi
+	if (WiFi.status() == WL_CONNECTED) {
+		// Here to do when WiFi is connected.
+		if (Blynk.connected()) Blynk.run();
+		Timer.run();
+		//OTA_Handle();			// Obsługa OTA (Over The Air) wgrywanie nowego kodu przez Wi-Fi
+	}
+	else {
+		// Here to do when WiFi is not connected.
+		tft.fillScreen(TFT_BLACK);
+		tft.setTextFont(4);
+		tft.setCursor(0, 0);
+		tft.setTextSize(1);
+		tft.setTextColor(TFT_RED, TFT_BLACK);
+		tft.println(" No WiFi connection!");
+		delay(1500);
+	}
+	Portal.handleClient();
 }

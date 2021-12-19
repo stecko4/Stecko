@@ -1,66 +1,69 @@
 #include <Arduino.h>
 
-
 //AutoConnect https://hieromon.github.io/AutoConnect/
-#include <ESP8266WiFi.h>
-#include <ESP8266WebServer.h>
+#include <ESP8266WiFi.h>		// Replace 'ESP8266WiFi.h' with 'WiFi.h. for ESP32
+#include <ESP8266WebServer.h>	// Replace 'ESP8266WebServer.h'with 'WebServer.h' for ESP32
 #include <AutoConnect.h>
 
 //WiFiWebServer Server;
-ESP8266WebServer	Server;		// Replace with WebServer for ESP32
-AutoConnect		Portal(Server);
+ESP8266WebServer	Server;		// Replace 'ESP8266WebServer' with 'WebServer' for ESP32
+AutoConnect			Portal(Server);
 AutoConnectConfig	Config;
 
-
+/*
 //for OTA
 #include <ESP8266mDNS.h>
 #include <WiFiUdp.h>
-#include <ArduinoOTA.h>					//https://github.com/esp8266/Arduino/tree/master/libraries/ArduinoOTA
+#include <ArduinoOTA.h>				// https://github.com/esp8266/Arduino/tree/master/libraries/ArduinoOTA
 bool OTAConfigured = 0;
+*/
 
-//#define BLYNK_DEBUG					//Optional, this enables lots of prints
+
+//#define BLYNK_DEBUG				// Optional, this enables lots of prints
 //#define BLYNK_PRINT Serial
-//#include <ESP8266WiFi.h> declared for AutoConnect     //ESP8266 Core WiFi Library (you most likely already have this in your sketch)
-#include <BlynkSimpleEsp8266.h>				//https://github.com/blynkkk/blynk-library
-#include <SimpleTimer.h>				//https://github.com/jfturcot/SimpleTimer
-#include <TimeLib.h>					//https://github.com/PaulStoffregen/Time				
+//#include <ESP8266WiFi.h> declared for AutoConnect     // ESP8266 Core WiFi Library (you most likely already have this in your sketch)
+#include <BlynkSimpleEsp8266.h>		// https://github.com/blynkkk/blynk-library
+#include <SimpleTimer.h>			// https://github.com/jfturcot/SimpleTimer
+#include <TimeLib.h>				// https://github.com/PaulStoffregen/Time				
 #include <WidgetRTC.h>
-#include <math.h>					//Potrzebne tylko do obliczenia log() w funkcji "Thermistor(int RawADC)"
-WidgetBridge bridge1(V20);				//Initiating Bridge Widget on V20 of Device A
-WidgetTerminal terminal(V40);				//Attach virtual serial terminal to Virtual Pin V40
-WidgetLED WidgetLamp(V8);				//Inicjacja diody LED dla załączania CO
-WidgetLED WigdetFan(V9);
-SimpleTimer Timer;					//Timer do sprawdzania połaczenia z BLYNKiem (co 30s) i uruchamiania MainFunction (co 3s)
-WidgetRTC rtc;						//Inicjacja widgetu zegara czasu rzeczywistego RTC
+#include <math.h>					// Potrzebne tylko do obliczenia log() w funkcji "Thermistor(int RawADC)"
+//WidgetBridge	bridge1(V20);		// Initiating Bridge Widget on V20 of Device A
+//WidgetTerminal	terminal(V40);	// Attach virtual serial terminal to Virtual Pin V40
+WidgetLED		WidgetLamp(V8);		// Inicjacja diody LED dla załączania różowej lampy
+WidgetLED		WigdetFan(V9);		// Inicjacja diody LED dla załączania wentylatora
+SimpleTimer		Timer;				// Timer do sprawdzania połaczenia z BLYNKiem (co 30s) i uruchamiania MainFunction (co 3s)
+WidgetRTC		rtc;				// Inicjacja widgetu zegara czasu rzeczywistego RTC
 
 
-const int ThermistorPIN = A0;				// ESP8266 Analog Pin ADC0 = A0
-float pad = 12000;					// balance/pad resistor value, set this to the measured resistance of your pad resistor
+const int ThermistorPIN = A0;		// ESP8266 Analog Pin ADC0 = A0
+float pad 				= 12000;	// balance/pad resistor value, set this to the measured resistance of your pad resistor
 
-int		Tryb_Sterownika		= 0;		//Tryb_Sterownika 0 = AUTO, 1 = ON, 2 = OFF, 3 = MANUAL
-float		SetTempActual		= 60;		//Temperatura według której załączany jest wentylator
-boolean		GrowLampStatus		= false;	//Domyślnie lampa wyłączona		(false = OFF, true = ON)
-boolean		FanStatus		= false;	//Domyślnie wentylator wyłączony	(false = OFF, true = ON)
-boolean		LampTempHigh		= false;	//Alarm gdy temperatura lampy przekroczy zbyt wysoka wartość
-int		StartHour		= 0;		//Godzina włączenia lampy
-int 		StartMinute		= 0;		//Minuta włączenia lampy
-int		StopHour		= 0;		//Godzina wyłączenia lampy
-int 		StopMinute		= 0;		//Minuta wyłączenia lampy
-boolean		DayOfWeek[7]		= {false,false,false,false,false,false,false}; //Dni tygodznia kiedy załączy się lampa
-int		dzien			= 1;		//day of the week (1-7), Sunday is day 1
-int		godzina			= 0;		//the hour now (0-23)
+int		Tryb_Sterownika	= 0;		// Tryb_Sterownika 0 = AUTO, 1 = ON, 2 = OFF, 3 = MANUAL
+float	SetTempActual	= 60;		// Temperatura według której załączany jest wentylator
+boolean	GrowLampStatus	= false;	// Domyślnie lampa wyłączona		(false = OFF, true = ON)
+boolean	FanStatus		= false;	// Domyślnie wentylator wyłączony	(false = OFF, true = ON)
+boolean	LampTempHigh	= false;	// Alarm gdy temperatura lampy przekroczy zbyt wysoka wartość
+int		StartHour		= 0;		// Godzina włączenia lampy
+int 	StartMinute		= 0;		// Minuta włączenia lampy
+int		StopHour		= 0;		// Godzina wyłączenia lampy
+int 	StopMinute		= 0;		// Minuta wyłączenia lampy
+boolean	DayOfWeek[7]	= {false,false,false,false,false,false,false}; // Dni tygodznia kiedy załączy się lampa
+int		dzien			= 1;		// day of the week (1-7), Sunday is day 1
+int		godzina			= 0;		// the hour now (0-23)
 int		minuta			= 0;		// the minute now (0-59)
-float		temp			= 0;		//temperatura radiatora zczytana z termistora
+float	temp			= 0;		// temperatura radiatora z termistora
+ float	TemtHist		= 10;		// Histereza dla temperatury
 
 //STAŁE
-const char	ssid[]			= "ECN";	//Nazwa sieci WiFi (Service Set Identifier)
-const char	pass[]			= "Pecherek1987";//Hasło do sieci WiFi
-const char	auth[]			= "7ee4a4fee7f74a7596a37458bdef6168";	//Token Pokój Rymanowska
-const int	PlantLED		= D5;		//Pin do włączania światła LED
-const int	Fan			= D6;		//Pin do włączania wentylatora
-const int	Moisture		= D7;		//Pin do włączania nawilżacza powietrza
-const float	TemtHist		= 10;		//Histereza dla temperatury
-const float	TempAlarm		= 70;		//Maksymala dozwolona temperatura lampy
+//const char	ssid[]		= "Your SSID";							// Not required with AutoConnect
+//const char	pass[]		= "Router password";					// Not required with AutoConnect
+const char		auth[]	 	= "V8_3uZNcYsMgF3A5a7zn6cOuBR8bA6bR";	// Token Avocado
+const char		server[] 	= "192.168.1.204";  					// IP for your Local Server or DNS server addres stecko.duckdns.org
+const int		port 		= 8080;									// Port na którym jest serwer Blykn
+const int		PlantLED	= D5;		// Pin do włączania światła LED
+const int		Fan			= D6;		// Pin do włączania wentylatora
+const int		Moisture	= D7;		// Pin do włączania nawilżacza powietrza
+const float		TempAlarm	= 70;		// Maksymala dozwolona temperatura lampy
 
 //---------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -114,7 +117,7 @@ void blynkCheck()
 		Serial.println("WL_DISCONNECTED: disconnected from a network");
 	}
 }
-
+/*
 //Over-The-Air w skrócie OTA umożliwia przesyłanie plików do urządzeń przez sieć WiFi
 void OTA_Handle()
 {
@@ -176,20 +179,20 @@ void OTA_Handle()
 		}
 	}
 }
-
+*/
 //Ustawienie trybów sterowania lampą LED
 void TrybManAuto()
 {
-	dzien = weekday(now());					//day of the week (1-7), Sunday is day 1
-	godzina = hour(now());					//the hour now  (0-23)
-	minuta =  minute(now());				//the minute now (0-59)
+	dzien = weekday(now());					// day of the week (1-7), Sunday is day 1
+	godzina = hour(now());					// the hour now  (0-23)
+	minuta =  minute(now());				// the minute now (0-59)
 	if (Tryb_Sterownika == 0 && DayOfWeek[dzien-1] && godzina * 60 + minuta >= StartHour * 60 + StartMinute && godzina * 60 + minuta < StopHour * 60 + StopMinute && StartHour != -1 && StartMinute != -1 && StopHour != -1 && StopMinute != -1)		//Tryb AUTO ON
-	{					//Tryb AUTO
+	{					// Tryb AUTO
 		if(GrowLampStatus == false)
 		{
 			GrowLampStatus = true; 
-			WidgetLamp.on();		//Widget lampa włączona
-			digitalWrite(PlantLED, LOW);	//Lampa włączona
+			WidgetLamp.on();		// Widget lampa włączona
+			digitalWrite(PlantLED, LOW);	// Lampa włączona
 		}
 	}
 	else if (Tryb_Sterownika == 0 && (!DayOfWeek[dzien-1] || godzina * 60 + minuta < StartHour * 60 + StartMinute || godzina * 60 + minuta >= StopHour * 60 + StopMinute || StartHour == -1 || StartMinute == -1 || StopHour == -1 || StopMinute == -1))	//Tryb AUTO OFF
@@ -197,27 +200,26 @@ void TrybManAuto()
 		if(GrowLampStatus == true)
 		{
 			GrowLampStatus = false; 
-			WidgetLamp.off();		//Widget lampa wyłączona
-			digitalWrite(PlantLED, HIGH);	//Lampa wyłączona
-
+			WidgetLamp.off();		// Widget lampa wyłączona
+			digitalWrite(PlantLED, HIGH);	// Lampa wyłączona
 		}		
 	}
-	else if (Tryb_Sterownika == 1)		//Tryb ON
+	else if (Tryb_Sterownika == 1)		// Tryb ON
 	{
 		if(GrowLampStatus == false)
 		{
 			GrowLampStatus = true;
-			WidgetLamp.on();		//Widget lampa włączona
-			digitalWrite(PlantLED, LOW);	//Lampa włączona
+			WidgetLamp.on();		// Widget lampa włączona
+			digitalWrite(PlantLED, LOW);	// Lampa włączona
 		}
 	}
-	else if (Tryb_Sterownika == 2)		//Tryb OFF
+	else if (Tryb_Sterownika == 2)		// Tryb OFF
 	{
 		if(GrowLampStatus == true)
 		{
 			GrowLampStatus = false;
-			WidgetLamp.off();		//Widget lampa wyłączona
-			digitalWrite(PlantLED, HIGH);	//Wentylator wyłączony
+			WidgetLamp.off();		// Widget lampa wyłączona
+			digitalWrite(PlantLED, HIGH);	// Wentylator wyłączony
 		}
 	}
 }
@@ -287,9 +289,10 @@ int WiFi_Strength (long Signal)
 //Wysyłanie danych na serwer Blynka
 void Wyslij_Dane()
 {
-	Blynk.virtualWrite(V0, temp);				//Temperatura [°C]
-	Blynk.virtualWrite(V18, SetTempActual);			//Temperatura zadana [°C]
-	Blynk.virtualWrite(V25, WiFi_Strength(WiFi.RSSI()));	//Siła sygnału Wi-Fi [%], constrain() limits range of sensor values to between 0 and 100
+	Blynk.virtualWrite(V0, temp);							// Temperatura [°C]
+	Blynk.virtualWrite(V18, SetTempActual);					// Temperatura zadana [°C]
+
+	Blynk.virtualWrite(V25, WiFi_Strength(WiFi.RSSI()));	// Siła sygnału Wi-Fi [%], constrain() limits range of sensor values to between 0 and 100
 }
 
 //Sterowanie załączeniem lampy z aplikacji (AUTO, ON, OFF)
@@ -374,6 +377,13 @@ BLYNK_WRITE(V13)
 	}
 }
 
+//Ustawienie histereza dla temperatury przy której załączy się wentylator
+BLYNK_WRITE(V14)
+{
+	TemtHist = param.asFloat();
+	Fan_Control();
+}
+
 //Uruchamia po kolei wszystkie niezbędne funcje
 void MainFunction()
 {	
@@ -410,20 +420,23 @@ void setup() {
   Serial.begin(115200);
 
 	// Autoconnect
-	Config.hostName = "Avocado";		// Sets host name to SotAp identification
-	//Config.homeUri = "/_ac";		// Sets home path of Sketch application
-	Config.retainPortal = true;		// Launch the captive portal on-demand at losing WiFi
-	Config.autoReconnect = true;		// Enable auto-reconnect
-	Config.ota = AC_OTA_BUILTIN;
-	Portal.config(Config);    		// Don't forget it.
-	if (Portal.begin())
+	Config.apid = "Avocado";			//SoftAP's SSID.
+	Config.psk = "12345678";			//Sets password for SoftAP. The length should be from 8 to up to 63.
+	Config.homeUri = "/_ac";			// Sets home path of Sketch application
+	Config.retainPortal = true;			// Launch the captive portal on-demand at losing WiFi
+	Config.autoReconnect = true;		// Automatically will try to reconnect with the past established access point (BSSID) when the current configured SSID in ESP8266/ESP32 could not be connected.
+	Config.ota = AC_OTA_BUILTIN;		//Specifies to include AutoConnectOTA in the Sketch.
+	//Config.retainPortal = true;		//Continue the portal function even if the captive portal times out. The STA + SoftAP mode of the ESP module continues and accepts the connection request to the AP.
+	//Config.immediateStart = true;		//Start the captive portal with AutoConnect::begin.
+	Portal.config(Config);				// Don't forget it.
+	if (Portal.begin())					// Starts and behaves captive portal
 	{	
 		Serial.println("WiFi connected: " + WiFi.localIP().toString());
 	}
 
-	//WiFi.mode(WIFI_STA);				//Station mode (aka STA mode or WiFi client mode). ESP32 connects to an access point.
 	//WiFi.begin(ssid, pass);
-	Blynk.config(auth);
+	Blynk.config(auth, server, port);   // for local servernon-blocking, even if no server connection
+	//Blynk.config(auth);				//For cloud
 
 	//Inicjalizacja Timerów
 	Timer.setInterval(30000, blynkCheck);		//Co 30s zostanie sprawdzony czy jest sieć Wi-Fi i czy połączono z serwerem Blynk
@@ -445,7 +458,7 @@ void loop() {
 		// Here to do when WiFi is connected.
 		if (Blynk.connected()) Blynk.run();
 		Timer.run();
-		OTA_Handle();			//Obsługa OTA (Over The Air) wgrywanie nowego kodu przez Wi-Fi
+		//OTA_Handle();			//Obsługa OTA (Over The Air) wgrywanie nowego kodu przez Wi-Fi
 	}
 	else
 	{
