@@ -7,7 +7,8 @@
 WebServer			Server;		// Replace 'ESP8266WebServer' with 'WebServer' for ESP32
 AutoConnect			Portal(Server);
 AutoConnectConfig	Config;       // Enable autoReconnect supported on v0.9.4
-//const String hostname = "PokojRymanowska";
+String viewCredential(PageArgument&);
+String delCredential(PageArgument&);
 
 
 //Biblioteka do obsługi wyświetlacza, bardzo szybka
@@ -50,7 +51,8 @@ Adafruit_SHT31 sht31 = Adafruit_SHT31();
 #include <SimpleTimer.h>			// https://github.com/jfturcot/SimpleTimer
 #include <TimeLib.h>
 SimpleTimer Timer;					// Timer do sprawdzania połaczenia z BLYNKiem (co 30s) i uruchamiania MainFunction (co 3s)
-int timerID;						// Przetrzymuje ID Timera, potrzebne dla przycisku i włączania ekranu
+int			timerID;				// Przetrzymuje ID Timera, potrzebne dla przycisku i włączania ekranu
+int			timerIDReset		= -1;//Przetrzymuje ID Timera https://desire.giesecke.tk/index.php/2018/01/30/change-global-variables-from-isr/
 
 #include <WidgetRTC.h>
 WidgetBridge bridge1(V20);			// Initiating Bridge Widget on V20 of Device A
@@ -63,13 +65,13 @@ float		SetTempManual		= 21;		// Temperatura nastawiana manualnie z aplikacji Bly
 float		SetTempActual		= 18.5;		// Temperatura według której sterowana jest temperatura (auto lub manual)
 float		SetTempSchedule[7][24]	= {
 //00:00 01:00 02:00 03:00 04:00 05:00 06:00 07:00 08:00 09:00 10:00 11:00 12:00 13:00 14:00 15:00 16:00 17:00 18:00 19:00 20:00 21:00 22:00 23:00
-  {18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.6, 20.6, 20.6, 20.6, 18.5 },  // Niedziela
-  {18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.6, 20.6, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.6, 20.6, 20.6, 20.6, 20.6, 20.6, 18.5 },  // Poniedziałek
-  {18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.6, 20.6, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.6, 20.6, 20.6, 20.6, 20.6, 20.6, 18.5 },  // Wtorek
-  {18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.6, 20.6, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.6, 20.6, 20.6, 20.6, 20.6, 20.6, 18.5 },  // Środa
-  {18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.6, 20.6, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.6, 20.6, 20.6, 20.6, 20.6, 20.6, 18.5 },  // Czwartek
-  {18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.6, 20.6, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.6, 20.6, 20.6, 20.6, 20.6, 20.6, 18.5 },  // Piątek
-  {18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.6, 18.5 }   // Sobota
+  {18.7, 18.7, 18.7, 18.7, 18.7, 18.7, 18.7, 18.7, 18.7, 18.7, 18.7, 20.6, 20.6, 20.6, 20.6, 20.6, 20.6, 20.6, 20.6, 20.6, 20.6, 20.6, 20.6, 18.7 },  // Niedziela
+  {18.7, 18.7, 18.7, 18.7, 18.7, 18.7, 18.7, 18.7, 18.7, 18.7, 20.6, 20.6, 20.6, 20.6, 20.6, 20.6, 20.6, 20.6, 20.6, 20.6, 20.6, 20.6, 20.6, 18.7 },  // Poniedziałek
+  {18.7, 18.7, 18.7, 18.7, 18.7, 18.7, 18.7, 18.7, 18.7, 18.7, 20.6, 20.6, 20.6, 20.6, 20.6, 20.6, 20.6, 20.6, 20.6, 20.6, 20.6, 20.6, 20.6, 18.7 },  // Wtorek
+  {18.7, 18.7, 18.7, 18.7, 18.7, 18.7, 18.7, 18.7, 18.7, 18.7, 20.6, 20.6, 20.6, 20.6, 20.6, 20.6, 20.6, 20.6, 20.6, 20.6, 20.6, 20.6, 20.6, 18.7 },  // Środa
+  {18.7, 18.7, 18.7, 18.7, 18.7, 18.7, 18.7, 18.7, 18.7, 18.7, 20.6, 20.6, 20.6, 20.6, 20.6, 20.6, 20.6, 20.6, 20.6, 20.6, 20.6, 20.6, 20.6, 18.7 },  // Czwartek
+  {18.7, 18.7, 18.7, 18.7, 18.7, 18.7, 18.7, 18.7, 18.7, 18.7, 20.6, 20.6, 20.6, 20.6, 20.6, 20.6, 20.6, 20.6, 20.6, 20.6, 20.6, 20.6, 20.6, 18.7 },  // Piątek
+  {18.7, 18.7, 18.7, 18.7, 18.7, 18.7, 18.7, 18.7, 18.7, 18.7, 18.7, 18.7, 18.7, 18.7, 18.7, 18.7, 18.7, 18.7, 18.7, 18.7, 18.7, 18.7, 20.6, 18.7 }   // Sobota
 }; //Ustawienia temperatury dla poszczególnych dni/godzin, temperatura musi być pomiędzy 14 a 26 stopni Celsjusza z dokładnością do 1 miejsca po przecinku
 int			OLED_ON				= 1;		// Przyjmuje wartość '1' dla OLED włączony i '0' dla OLED wyłączony
 boolean		Podlane				= true;		// Przyjmuje wartość true gdy podlane czyli wilgotność >80% i false gdy sucho wilgotność <60%
@@ -96,7 +98,7 @@ boolean		isScreenON			= true;		// TRUE jeśli ekran świeci FALSE jeśli nie św
 //STAŁE
 //const char	ssid[]			= "Your SSID";							// Not required with AutoConnect
 //const char	pass[]			= "Router password";					// Not required with AutoConnect
-const char		auth[]			= "SCrogkMuHEkHkHJCS1Yl0WMb6gaiQv78";	// Token Pokój Rymanowska
+const char		auth[]			= "34E3Pay9KeL3M6nmeageKsxROS5lho-T";	// Token Pokój Rymanowska
 const char		server[] 		= "192.168.1.204";  					// IP for your Local Server or DNS server addres stecko.duckdns.org
 const int		port 			= 8080;									// Port na którym jest serwer Blykn
 const int		MinTemp			= 14;		// Najniższa możliwa temperatura do ustawienia
@@ -119,11 +121,17 @@ void drawProgressBar(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint8_t per
   tft.fillRect(x + margin, y + margin, barWidth * percent / 100.0, barHeight, barColor);
 }
 
+// Soft restart sterownika
+void RestartESP32()
+{
+	ESP.restart(); 	//Restartuje sterownik
+}
+
 //Informacja że połączono z serwerem Blynk, synchronizacja danych
 BLYNK_CONNECTED()
 {
 	Serial.println("Reconnected, syncing with cloud.");
-	bridge1.setAuthToken("q3lvQ_5iEAtG06rXBrmUtsPZ_2DhuGQj"); // Token of the hardware B (Łazienka)
+	bridge1.setAuthToken("GkXIcT6IWvb0w6RTJyVWsQUe5u5bipe3"); // Token of the hardware B (Łazienka)
 	rtc.begin();
 	Blynk.syncAll();
 }
@@ -746,6 +754,22 @@ void MainFunction()
 	}
 }
 
+// Definicja strony z wersją firmwaru. Definitions of AutoConnectAux page
+static const char Version[] PROGMEM = R"(
+{
+  "title": "Version",
+  "uri": "/page",
+  "menu": true,
+  "element": [
+    {
+      "name": "cap",
+      "type": "ACText",
+      "value": "Version: 1.1.1<br>Date: 30.03.2022"
+    }
+  ]
+}
+)";
+
 /***********************************************************************************************/
 
 void setup()
@@ -774,19 +798,20 @@ void setup()
 
 	attachInterrupt(digitalPinToInterrupt(BUTTON), handleInterrupt, RISING);	// Obsługa przerwań dla czujnika ruchu
 	timerID = Timer.setTimeout(50000, ScreenOFF);					// Wyłączy iluminacje sedesu za 500s
-
-
-	// Autoconnect
-	Config.apid = "PokojRymanowska_ESP32";		// SoftAP's SSID.
-	Config.psk = "12345678";					// Sets password for SoftAP. The length should be from 8 to up to 63.
-	Config.hostName = "PokojRymanowska_ESP32";	// Sets host name to SotAp identification
-	Config.homeUri = "/_ac";					// Sets home path of Sketch application
-	Config.retainPortal = true;					// Launch the captive portal on-demand at losing WiFi
-	Config.autoReconnect = true;				// Enable auto-reconnect
-	Config.ota = AC_OTA_BUILTIN;
-	Portal.config(Config);    					// Don't forget it.
-	//Server.on("/", rootPage);
 	
+	// Autoconnect
+	Config.hostName 		= "PokojRymanowska_ESP32";		// Sets host name to SotAp identification
+	Config.apid 			= "PokojRymanowska_ESP32";		// SoftAP's SSID.
+	Config.psk 				= "12345678";					// Sets password for SoftAP. The length should be from 8 to up to 63.
+	Config.homeUri 			= "/_ac";						// Sets home path of Sketch application
+	Config.retainPortal 	= true;							// Launch the captive portal on-demand at losing WiFi
+	Config.autoReconnect 	= true;							// Automatically will try to reconnect with the past established access point (BSSID) when the current configured SSID in ESP8266/ESP32 could not be connected.
+	Config.ota 				= AC_OTA_BUILTIN;				// Specifies to include AutoConnectOTA in the Sketch.
+	Portal.load(FPSTR(Version));							// Load AutoConnectAux custom web page
+	Config.menuItems = Config.menuItems | AC_MENUITEM_DELETESSID;	// https://hieromon.github.io/AutoConnect/apiconfig.html#menuitems
+	Portal.config(Config);									// Don't forget it.
+
+
 	// Here to do when WiFi is not connected.
 	tft.fillScreen(TFT_BLACK);
 	tft.setCursor(0, 0);
@@ -870,14 +895,36 @@ void setup()
 
 void loop()
 {
-	if (WiFi.status() == WL_CONNECTED) {
-		// Here to do when WiFi is connected.
-		if (Blynk.connected()) Blynk.run();
-		Timer.run();
-		//OTA_Handle();			// Obsługa OTA (Over The Air) wgrywanie nowego kodu przez Wi-Fi
+	Timer.run();
+	Portal.handleClient();
+
+	if (WiFi.status() == WL_CONNECTED)
+	{
+				// Here to do when WiFi is connected.
+		if (Blynk.connected())
+		{
+			Blynk.run();
+		} 
+		else
+		{
+			Blynk.connect();
+		}
+		//OTA_Handle();			//Obsługa OTA (Over The Air) wgrywanie nowego kodu przez Wi-Fi
+		if(Timer.isEnabled( timerIDReset ))
+		{
+			Timer.deleteTimer( timerIDReset );
+		}
 	}
-	else {
+	else	//Zrestartuje sterownik jeśli brak sieci przez 5min
+	{
+		if (Timer.isEnabled( timerIDReset ) == false)
+		{
+			timerIDReset = Timer.setTimeout( 300000, RestartESP32 ); //300000
+		}
 		// Here to do when WiFi is not connected.
+		delay(10);
+		digitalWrite(2, HIGH);			//Ustawienie wartośći HIGH = podświetlanie włączone
+		isScreenON = true;
 		tft.fillScreen(TFT_BLACK);
 		tft.setTextFont(4);
 		tft.setCursor(0, 0);
@@ -886,5 +933,5 @@ void loop()
 		tft.println(" No WiFi connection!");
 		delay(1500);
 	}
-	Portal.handleClient();
+
 }

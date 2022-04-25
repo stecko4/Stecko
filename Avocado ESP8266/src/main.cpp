@@ -9,6 +9,21 @@
 ESP8266WebServer	Server;		// Replace 'ESP8266WebServer' with 'WebServer' for ESP32
 AutoConnect			Portal(Server);
 AutoConnectConfig	Config;
+// Definicja strony z wersją firmwaru. Definitions of AutoConnectAux page
+static const char Version[] PROGMEM = R"(
+{
+  "title": "Version",
+  "uri": "/page",
+  "menu": true,
+  "element": [
+    {
+      "name": "cap",
+      "type": "ACText",
+      "value": "Version: 1.1.1<br>Date: 30.03.2022"
+    }
+  ]
+}
+)";
 
 /*
 //for OTA
@@ -38,7 +53,7 @@ WidgetRTC		rtc;				// Inicjacja widgetu zegara czasu rzeczywistego RTC
 const int ThermistorPIN = A0;		// ESP8266 Analog Pin ADC0 = A0
 float pad 				= 12000;	// balance/pad resistor value, set this to the measured resistance of your pad resistor
 
-int		Tryb_Sterownika	= 0;		// Tryb_Sterownika 0 = AUTO, 1 = ON, 2 = OFF, 3 = MANUAL
+int		Tryb_Sterownika	= 0;		// Tryb_Sterownika 0 = AUTO, 1 = ON, 2 = OFF
 float	SetTempActual	= 60;		// Temperatura według której załączany jest wentylator
 boolean	GrowLampStatus	= false;	// Domyślnie lampa wyłączona		(false = OFF, true = ON)
 boolean	FanStatus		= false;	// Domyślnie wentylator wyłączony	(false = OFF, true = ON)
@@ -57,12 +72,12 @@ float	temp			= 0;		// temperatura radiatora z termistora
 //STAŁE
 //const char	ssid[]		= "Your SSID";							// Not required with AutoConnect
 //const char	pass[]		= "Router password";					// Not required with AutoConnect
-const char		auth[]	 	= "V8_3uZNcYsMgF3A5a7zn6cOuBR8bA6bR";	// Token Avocado
+const char		auth[]	 	= "EAdk2-bGQGu4Ek8m3hSRU52NeqbKqcm9";	// Token Avocado
 const char		server[] 	= "192.168.1.204";  					// IP for your Local Server or DNS server addres stecko.duckdns.org
 const int		port 		= 8080;									// Port na którym jest serwer Blykn
 const int		PlantLED	= D5;		// Pin do włączania światła LED
 const int		Fan			= D6;		// Pin do włączania wentylatora
-const int		Moisture	= D7;		// Pin do włączania nawilżacza powietrza
+//const int		Moisture	= D7;		// Pin do włączania nawilżacza powietrza
 const float		TempAlarm	= 70;		// Maksymala dozwolona temperatura lampy
 
 //---------------------------------------------------------------------------------------------------------------------------------------------
@@ -420,16 +435,17 @@ void setup() {
   Serial.begin(115200);
 
 	// Autoconnect
-	Config.apid = "Avocado";			//SoftAP's SSID.
-	Config.psk = "12345678";			//Sets password for SoftAP. The length should be from 8 to up to 63.
-	Config.homeUri = "/_ac";			// Sets home path of Sketch application
-	Config.retainPortal = true;			// Launch the captive portal on-demand at losing WiFi
-	Config.autoReconnect = true;		// Automatically will try to reconnect with the past established access point (BSSID) when the current configured SSID in ESP8266/ESP32 could not be connected.
-	Config.ota = AC_OTA_BUILTIN;		//Specifies to include AutoConnectOTA in the Sketch.
-	//Config.retainPortal = true;		//Continue the portal function even if the captive portal times out. The STA + SoftAP mode of the ESP module continues and accepts the connection request to the AP.
-	//Config.immediateStart = true;		//Start the captive portal with AutoConnect::begin.
-	Portal.config(Config);				// Don't forget it.
-	if (Portal.begin())					// Starts and behaves captive portal
+	Config.hostName 		= "Avocado";							// Sets host name to SotAp identification
+	Config.apid 			= "Avocado";							// SoftAP's SSID.
+	Config.psk 				= "12345678";							// Sets password for SoftAP. The length should be from 8 to up to 63.
+	Config.homeUri 			= "/_ac";								// Sets home path of Sketch application
+	Config.retainPortal 	= true;									// Launch the captive portal on-demand at losing WiFi
+	Config.autoReconnect 	= true;									// Automatically will try to reconnect with the past established access point (BSSID) when the current configured SSID in ESP8266/ESP32 could not be connected.
+	Config.ota 				= AC_OTA_BUILTIN;						// Specifies to include AutoConnectOTA in the Sketch.
+	Portal.load(FPSTR(Version));									// Load AutoConnectAux custom web page
+	Config.menuItems = Config.menuItems | AC_MENUITEM_DELETESSID;	// https://hieromon.github.io/AutoConnect/apiconfig.html#menuitems
+	Portal.config(Config);											// Don't forget it.
+	if (Portal.begin())												// Starts and behaves captive portal
 	{	
 		Serial.println("WiFi connected: " + WiFi.localIP().toString());
 	}
@@ -446,7 +462,7 @@ void setup() {
 	//Ustawianie pinów
 	pinMode(PlantLED, OUTPUT);
 	pinMode(Fan, OUTPUT);
-	pinMode(Moisture, OUTPUT);
+	//pinMode(Moisture, OUTPUT);
 
 	blynkCheck(); 					//Piewsze połaczenie z Blynk, nie trzeba czekać 30s po restarcie
 

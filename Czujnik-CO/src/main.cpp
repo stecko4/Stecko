@@ -27,7 +27,9 @@ ESP8266WebServer	Server;		// Replace 'ESP8266WebServer' with 'WebServer' for ESP
 AutoConnect			Portal(Server);
 AutoConnectConfig	Config;
 
+
 //Mutichannel_Gas_Sensor definition 
+#include <Wire.h>
 #include "MutichannelGasSensor.h"
 
 //BME280 definition
@@ -46,12 +48,11 @@ BME280I2C::Settings settings(
 BME280I2C bme(settings);
 
 //for OTA
-/*
 #include <ESP8266mDNS.h>
 #include <WiFiUdp.h>
 #include <ArduinoOTA.h>			//https://github.com/esp8266/Arduino/tree/master/libraries/ArduinoOTA
 bool OTAConfigured = 0;
-*/
+
 
 //Wyswietlacz OLED
 #include <U8g2lib.h>			//https://github.com/olikraus/U8g2_Arduino
@@ -102,11 +103,11 @@ WidgetTerminal terminal(V40);		//Attach virtual serial terminal to Virtual Pin V
 int timerIDReset=-1;				//Przetrzymuje ID Timera https://desire.giesecke.tk/index.php/2018/01/30/change-global-variables-from-isr/
 
 
-//const char	ssid[]		= "Your SSID";							// Not required with AutoConnect
-//const char	pass[]		= "Router password";					// Not required with AutoConnect
-const char		auth[]	 	= "n101mT3mxQoQzA2yXcONYn1T7kCwPlqG";	// Token Łazienka Przychojec
-const char		server[] 	= "stecko.duckdns.org";  				// IP for your Local Server or DNS server addres
-const int		port 		= 8080;									// Port na którym jest serwer Blykn
+//const char	ssid[]		= "ECN";								// Not required with AutoConnect
+//const char	pass[]		= "Pecherek1987";						// Not required with AutoConnect
+const char		auth[]		= "0L0mY3ScYWfMWorSdAbIuyDegml6ZS_V";	// Token Łazienka Przychojec
+const char		server[]	= "stecko.duckdns.org";					// IP for your Local Server or DNS server addres
+const int		port		= 8080;									// Port na którym jest serwer Blykn
 //---------------------------------------------------------------------------------------------------------------------------------------------
 
 //Sprawdza czy połączone z serwerem Blynk
@@ -156,7 +157,8 @@ void blynkCheck()
 BLYNK_CONNECTED()
 {
 	Serial.println("Reconnected, syncing with cloud.");
-	Blynk.syncAll();
+	//Blynk.syncAll();
+	Blynk.syncVirtual(V20, V21, V22); // Synchronizacja tego co jest w aplikacji Blynk, tylno Virtual Pins które czymś sterują, nie te krure wysyłają dane do alpikacji
 }
 
 //Obsługa OTA (Over The Air) wgrywanie nowego kodu przez Wi-Fi
@@ -238,6 +240,13 @@ void Bathrum_Humidity_Control()
 }
 */
 
+/*
+void DeleteCredentials()
+{
+	deleteAllCredentials();
+	WiFi.disconnect(true, true); // Clear memorized STA configuration
+}
+*/
 //Odczyt z czujnika BME280, temperatura, wilgotność i ciśnienie
 void Read_BME280_Values()
 {
@@ -260,7 +269,7 @@ void Read_BME280_Values()
 void MultiGas_Values()
 {
 	//http://wiki.seeedstudio.com/Grove-Multichannel_Gas_Sensor/
-	Metan		= gas.measure_CH4();		// Methane CH4 >1000ppm
+	//Metan		= gas.measure_CH4();		// Methane CH4 >1000ppm
 	Tlenek_Wegla	= gas.measure_CO();		// Carbon monoxide CO 1 – 1000ppm
 	/*
 	NH3 = gas.measure_NH3();			// Ammonia NH3 1 – 500ppm
@@ -277,14 +286,53 @@ void MultiGas_Values()
 void MultiGas_ValuesALL()
 {
 	//http://wiki.seeedstudio.com/Grove-Multichannel_Gas_Sensor/
-	Metan		= gas.measure_CH4();		// Methane CH4 > 1000ppm
-	Tlenek_Wegla	= gas.measure_CO();		// Carbon monoxide CO 1 – 1000ppm
-	Ammonia		= gas.measure_NH3();		// Ammonia NH3 1 – 500ppm
-	Nitrogen_dioxide =gas.measure_NO2();		// Nitrogen dioxide NO2 0.05 – 10ppm
-	Propane		= gas.measure_C3H8();		// Propane C3H8 > 1000ppm
-	IsoButane	= gas.measure_C4H10();		// Iso-butane C4H10 > 1000ppm
-	Hydrogen	= gas.measure_H2();		// Hydrogen H2 1 – 1000ppm
-	Ethanol		= gas.measure_C2H5OH();		// Ethanol C2H5OH 10 – 500ppm */
+	Metan				= gas.measure_CH4();		// Methane CH4 > 1000ppm
+	Tlenek_Wegla		= gas.measure_CO();			// Carbon monoxide CO 1 – 1000ppm
+	Ammonia				= gas.measure_NH3();		// Ammonia NH3 1 – 500ppm
+	Nitrogen_dioxide	= gas.measure_NO2();		// Nitrogen dioxide NO2 0.05 – 10ppm
+	Propane				= gas.measure_C3H8();		// Propane C3H8 > 1000ppm
+	IsoButane			= gas.measure_C4H10();		// Iso-butane C4H10 > 1000ppm
+	Hydrogen			= gas.measure_H2();			// Hydrogen H2 1 – 1000ppm
+	Ethanol				= gas.measure_C2H5OH();		// Ethanol C2H5OH 10 – 500ppm */
+}
+
+//Zwraca siłę sygnału WiFi sieci do której jest podłączony w %. REF: https://www.adriangranados.com/blog/dbm-to-percent-conversion
+int WiFi_Strength (long Signal)
+{
+	return constrain(round((-0.0154*Signal*Signal)-(0.3794*Signal)+98.182), 0, 100);
+}
+
+//signal strength levels https://www.netspotapp.com/what-is-rssi-level.html
+String WiFi_levels(long Signal)
+{
+	String WiFiStrength = "WiFi Strenght ?";
+
+	if (Signal >= -50)
+	{
+		WiFiStrength = "Excellent";
+	}
+	else if (Signal < -50 && Signal >= -60)
+	{
+		WiFiStrength = "Very good";
+	}
+	else if (Signal < -60 && Signal >= -70)
+	{
+		WiFiStrength = "Good";
+	}
+	else if (Signal < -70 && Signal >= -80)
+	{
+		WiFiStrength = "Low";
+	}
+	else if (Signal < -80 && Signal >= -90)
+	{
+		WiFiStrength = "Very low";
+	}
+	else if (Signal < -90 )
+	{
+		WiFiStrength = "Unusable";
+	}
+	
+	return WiFiStrength;
 }
 
 //Włącza lub wyłącza wyświetlanie danych na ekranie OLED
@@ -297,12 +345,22 @@ void OLED_Display()
 		u8g2.setFontMode(1);
 		u8g2.setFont(u8g2_font_helvR08_tf);  
 		u8g2.drawStr(0,8,"Stezenie CO:"); 
-		u8g2.drawStr(0,42,"Stezenie Metanu:");
+		u8g2.drawStr(0,42,"WiFi Signal");
+		u8g2.setCursor(55,42);
+		u8g2.print(String(WiFi_Strength(WiFi.RSSI())) + "%");//BLAD!
+		u8g2.setCursor(0,54);
+		if (WiFi.status() == WL_CONNECTED)		//WL_CONNECTED: assigned when connected to a WiFi network
+		{
+			u8g2.print("WiFi Status: CONNECTED");
+		}
+		else
+		{
+			u8g2.print("WiFi Status: " + String(WiFi.status()));
+		}
+		u8g2.print("WiFi Status: " + String(WiFi.status()));
 		u8g2.setFont(u8g2_font_logisoso16_tf); 
 		u8g2.setCursor(0,28);
 		u8g2.print(String(int(Tlenek_Wegla)) + " ppm");
-		u8g2.setCursor(0,61);
-		u8g2.print(String(int(Metan)) + " ppm");
 		u8g2.sendBuffer(); 
 	}
 	else if (OLED_ON == 0 && Alarm_Gazowy == 0)
@@ -327,7 +385,7 @@ void Multi_Gas_Reset()
 	gas.begin(0x04);   //the default I2C address of the slave is 0x04
 	gas.powerOn();
 
-	Metan = gas.measure_CH4();          // Methane CH4 >1000ppm
+	//Metan = gas.measure_CH4();          // Methane CH4 >1000ppm
 	Tlenek_Wegla = gas.measure_CO();    // Carbon monoxide CO 1 – 1000ppm
 }
 
@@ -487,7 +545,8 @@ void RozgrzewanieCO()
 	u8g2.drawStr( 3, 25, "ROZGRZEWANIE");
 	u8g2.drawStr( 3, 50, "ZAKONCZONE");
 	u8g2.sendBuffer();
-	delay(1500);
+	delay(500);
+	OLED_Display();
 }
 
 //Rozgrzewanie sensora gazu
@@ -525,7 +584,7 @@ void Gas_Senor_Heating()
 		u8g2.drawStr( 3, 25, "ROZGRZEWANIE");
 		u8g2.drawStr( 3, 50, "ZAKONCZONE");
 		u8g2.sendBuffer();
-		delay(1500);
+		delay(500);
 	}
 	Metan = gas.measure_CH4();			// Methane CH4 >1000ppm
 	if (Metan > 10000)
@@ -539,47 +598,9 @@ void Gas_Senor_Heating()
 		u8g2.drawStr( 3, 25, "ROZGRZEWANIE");
 		u8g2.drawStr( 3, 50, "ZAKONCZONE");
 		u8g2.sendBuffer();
-		delay(1500);
+		delay(500);
 	}
-}
-
-//Zwraca siłę sygnału WiFi sieci do której jest podłączony w %. REF: https://www.adriangranados.com/blog/dbm-to-percent-conversion
-int WiFi_Strength (long Signal)
-{
-	return constrain(round((-0.0154*Signal*Signal)-(0.3794*Signal)+98.182), 0, 100);
-}
-
-//signal strength levels https://www.netspotapp.com/what-is-rssi-level.html
-String WiFi_levels(long Signal)
-{
-	String WiFiStrength = "WiFi Strenght ?";
-
-	if (Signal >= -50)
-	{
-		WiFiStrength = "Excellent";
-	}
-	else if (Signal < -50 && Signal >= -60)
-	{
-		WiFiStrength = "Very good";
-	}
-	else if (Signal < -60 && Signal >= -70)
-	{
-		WiFiStrength = "Good";
-	}
-	else if (Signal < -70 && Signal >= -80)
-	{
-		WiFiStrength = "Low";
-	}
-	else if (Signal < -80 && Signal >= -90)
-	{
-		WiFiStrength = "Very low";
-	}
-	else if (Signal < -90 )
-	{
-		WiFiStrength = "Unusable";
-	}
-	
-	return WiFiStrength;
+	OLED_Display();
 }
 
 //Wysyła dane na serwer Blynk
@@ -594,7 +615,7 @@ void Wyslij_Dane()
 	Blynk.virtualWrite(V5, heatIndex);		//Temperatura odczuwalna [°C] 
 	//Multigas Sensor
 	Blynk.virtualWrite(V7, Tlenek_Wegla);		//Stężenie Tlenku Węgla [ppm]
-	Blynk.virtualWrite(V8, Metan);			//Stężenie Metanu [ppm]  
+	//Blynk.virtualWrite(V8, Metan);			//Stężenie Metanu [ppm]  
 	//Blynk.virtualWrite(V9, BathFan);		//Stan włączenia wentylatora Wł/Wył
 	//Blynk.virtualWrite(V10, Piec_CO);		//Stan włączenia pieca CO Wł/Wył
 	Blynk.virtualWrite(V25, WiFi_Strength(WiFi.RSSI())); //Siła sygnału Wi-Fi [%]
@@ -612,9 +633,9 @@ void RestartCounter()
 //Soft restart sterownika
 void RestartESP32()
 {
-	terminal.clear();
-	terminal.println("Restarting!");
-	terminal.flush();
+	//terminal.clear();
+	//terminal.println("Restarting!");
+	//terminal.flush();
 	//delay(1000);
 	ESP.restart(); 	//Restartuje sterownik
 }
@@ -636,7 +657,7 @@ BLYNK_WRITE(V40)
 		terminal.println("V4   ->  Abs Humidity       g/m³");
 		terminal.println("V5   ->  Heat Index         °C");
 		terminal.println("V7   ->  Tlenek_Wegla       ppm");
-		terminal.println("V8   ->  Metan              ppm");
+		//terminal.println("V8   ->  Metan              ppm");
 		terminal.println("V20  <-  OLED_ON            1/0");
 		terminal.println("V21  <-  GasReset           1/0");
 		terminal.println("V22  <-  AlarmActive        1/0");
@@ -667,9 +688,9 @@ BLYNK_WRITE(V40)
 		terminal.print("V7     CO           =   ");
 		terminal.print(Tlenek_Wegla);
 		terminal.println(" ppm");
-		terminal.print("V8     Metan        =   ");
-		terminal.print(Metan);
-		terminal.println(" ppm");
+		//terminal.print("V8     Metan        =   ");
+		//terminal.print(Metan);
+		//terminal.println(" ppm");
 		terminal.print("V20    OLED_ON      =   ");
 		terminal.print(OLED_ON);
 		terminal.println(" ");
@@ -866,7 +887,8 @@ void Gas_Alarms_Count()
 //Włączanie i wyłączanie wyświetlacza z poziomu aplikacji BLYNK
 BLYNK_WRITE(V20)
 {
-	OLED_ON = param.asInt(); 
+	OLED_ON = param.asInt();
+	OLED_Display();
 }
 
 //Reset sensora gazu
@@ -908,45 +930,41 @@ void MainFunction()
 	Wyslij_Dane();					//Wysyła dane do serwera Blynk
 }
 
+// Definicja strony z wersją firmwaru. Definitions of AutoConnectAux page
+static const char Version[] PROGMEM = R"(
+{
+  "title": "Version",
+  "uri": "/page",
+  "menu": true,
+  "element": [
+    {
+      "name": "cap",
+      "type": "ACText",
+      "value": "Version: 1.1.3<br>Date: 25.04.2022"
+    }
+  ]
+}
+)";
+
 //---------------------------------------------------------------------------------------------------------------------------------------------
 
 void setup()
 {
-	Serial.begin(115200);
+	Serial.begin(115200);						// Initiate Serial communication.
 
-	// Autoconnect
-	Config.apid = "CO_Sensor";			//SoftAP's SSID.
-	Config.psk = "12345678";			//Sets password for SoftAP. The length should be from 8 to up to 63.
-	Config.homeUri = "/_ac";			// Sets home path of Sketch application
-	Config.retainPortal = true;			// Launch the captive portal on-demand at losing WiFi
-	Config.autoReconnect = true;		// Automatically will try to reconnect with the past established access point (BSSID) when the current configured SSID in ESP8266/ESP32 could not be connected.
-	Config.ota = AC_OTA_BUILTIN;		//Specifies to include AutoConnectOTA in the Sketch.
-	//Config.retainPortal = true;		//Continue the portal function even if the captive portal times out. The STA + SoftAP mode of the ESP module continues and accepts the connection request to the AP.
-	//Config.immediateStart = true;		//Start the captive portal with AutoConnect::begin.
-	Portal.config(Config);				// Don't forget it.
-	if (Portal.begin())
-	{	
-		Serial.println("WiFi connected: " + WiFi.localIP().toString());
-		//Server.on("/", handleRoot);
-	}
+	Timer.setInterval(30000, blynkCheck);		// Sprawdza czy BLYNK połączony co 30s
+	Timer.setInterval(15000, MainFunction);		// Uruchamia wszystko w pętli co 15s
+	Timer.setInterval(1000, Gas_Alarms_Count);	// Co 1s uruchamia funkcje i dolicza sekundę do poszczególnych alarmów
 
-	//WiFi.begin(ssid, pass);
-	Blynk.config(auth, server, port);   // for local servernon-blocking, even if no server connection
-	//Blynk.config(auth);				//For cloud
-
-	Timer.setInterval(30000, blynkCheck);		//Sprawdza czy BLYNK połączony co 30s
-	Timer.setInterval(10000, MainFunction);		//Uruchamia wszystko w pętli co 10s
-	Timer.setInterval(1000, Gas_Alarms_Count);	//Co 1s uruchamia funkcje i dolicza sekundę do poszczególnych alarmów
-
-	//Ustawianie pinów
-	//pinMode(BathFan, OUTPUT);
+	// Ustawianie pinów
+	// pinMode(BathFan, OUTPUT);
 	pinMode(Buzzer, OUTPUT);
-	//pinMode(Piec_CO, INPUT);
+	// pinMode(Piec_CO, INPUT);
 
-	//inicjowanie wyświetlacza
+	// inicjowanie wyświetlacza
 	u8g2.begin();
 	u8g2.enableUTF8Print();
-	u8g2.setFlipMode(0);				//Enable (1) or disable (0) 180 degree rotation of the display content
+	u8g2.setFlipMode(0);						// Enable (1) or disable (0) 180 degree rotation of the display content
 	u8g2.clearBuffer();
 	u8g2.setFontMode(1);
 	u8g2.setFont(u8g_font_helvB18);
@@ -956,16 +974,39 @@ void setup()
 	u8g2.print(F("GAZU")); 
 	u8g2.setFont(u8g_font_helvR08); 
 	u8g2.setCursor(0, 64);
-	u8g2.print("Connecting...");	// to: "+String(ssid));
+	u8g2.print("Connecting...");				// to: "+String(ssid));
 	u8g2.sendBuffer();
+	
+	
+	// Autoconnect
+	Config.hostName 		= "CO_Sensor";							// Sets host name to SotAp identification
+	Config.apid 			= "CO_Sensor";							// SoftAP's SSID.
+	Config.psk 				= "12345678";							// Sets password for SoftAP. The length should be from 8 to up to 63.
+	Config.homeUri 			= "/_ac";								// Sets home path of Sketch application
+	Config.retainPortal 	= true;									// Launch the captive portal on-demand at losing WiFi
+	Config.autoReconnect 	= true;									// Automatically will try to reconnect with the past established access point (BSSID) when the current configured SSID in ESP8266/ESP32 could not be connected.
+	Config.ota 				= AC_OTA_BUILTIN;						// Specifies to include AutoConnectOTA in the Sketch.
+	Portal.load(FPSTR(Version));									// Load AutoConnectAux custom web page
+	Config.menuItems = Config.menuItems | AC_MENUITEM_DELETESSID;	// https://hieromon.github.io/AutoConnect/apiconfig.html#menuitems
+	Portal.config(Config);											// Don't forget it.
+	if (Portal.begin())												// Starts and behaves captive portal
+	{	
+		Serial.println("WiFi connected: " + WiFi.localIP().toString());
+	}
+
+	// WiFi.begin(ssid, pass);
+	Blynk.config(auth, server, port);   // for local server non-blocking, even if no server connection
+	// Blynk.config(auth);				// For cloud
+
 
 	// Inicjalizacja Grove - Multichannel Gas Sensor
-	gas.begin(0x04);			//the default I2C address of the slave is 0x04
+	gas.begin(0x04);			// the default I2C address of the slave is 0x04
 	gas.powerOn();
 	delay(1000);
-	Gas_Senor_Heating();
+	// Gas_Senor_Heating();
+	RozgrzewanieCO();
 
-	//inicjowanie czujnika BME280
+	// inicjowanie czujnika BME280
 	if (!bme.begin())
 	{
 		Serial.println("Could not find a valid BME280 sensor, check wiring!");
@@ -982,23 +1023,31 @@ void loop()
 	//OTA_Handle();			//Obsługa OTA (Over The Air) wgrywanie nowego kodu przez Wi-Fi
 
 	Timer.run();
+	Portal.handleClient();
+	//Serial.println(String(WiFi.status()));
 	if (WiFi.status() == WL_CONNECTED)
 	{
 		// Here to do when WiFi is connected.
-		if (Blynk.connected()) Blynk.run();
-		//OTA_Handle();			//Obsługa OTA (Over The Air) wgrywanie nowego kodu przez Wi-Fi
-		if(Timer.isEnabled(timerIDReset))
+		if (Blynk.connected())
 		{
-			Timer.deleteTimer(timerIDReset);
+			Blynk.run();
+		} 
+		else
+		{
+			Blynk.connect();
+		}
+		//OTA_Handle();			//Obsługa OTA (Over The Air) wgrywanie nowego kodu przez Wi-Fi
+		if(Timer.isEnabled( timerIDReset ))
+		{
+			Timer.deleteTimer( timerIDReset );
 		}
 	}
 	else	//Zrestartuje sterownik jeśli brak sieci przez 5min
 	{
-		if (Timer.isEnabled(timerIDReset) == false)
+		if (Timer.isEnabled( timerIDReset ) == false)
 		{
-			timerIDReset = Timer.setTimeout(300000, RestartESP32);
+			timerIDReset = Timer.setTimeout( 300000, RestartESP32 ); //300000
 		}
 	}
 	
-	Portal.handleClient();
 }
